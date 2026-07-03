@@ -229,7 +229,8 @@ fn run_loop(player: Arc<Mutex<Player>>, settings_path: std::path::PathBuf, shutd
                     if !b2_label.is_empty() && !b2_url.is_empty() { buttons.push(activity::Button::new(b2_label, b2_url)); }
                     if !buttons.is_empty() { act = act.buttons(buttons); }
 
-                    match c.set_activity(act) {
+                    let _ = c.set_activity(act);
+                }
             }
         } else if !should_connect {
             thread::sleep(Duration::from_millis(5000));

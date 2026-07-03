@@ -3,19 +3,21 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useLibraryStore } from '../stores/library'
 import { usePlayerStore } from '../stores/player'
+import { useFavoritesStore } from '../stores/favorites'
 import { useSpotifyStore, mapSpotifyTrack } from '../stores/spotify'
 import { useUiStore } from '../stores/ui'
 import AlbumCard from '../components/AlbumCard.vue'
 import TrackList from '../components/TrackList.vue'
-import type { LibraryFilter, AlbumGroup } from '../types'
+import type { LibraryFilter, AlbumGroup, Track } from '../types'
 
 const lib = useLibraryStore()
 const player = usePlayerStore()
+const favorites = useFavoritesStore()
 const spotifyStore = useSpotifyStore()
 const ui = useUiStore()
 
 const selectedAlbum = ref<{ artist: string; album: string } | null>(null)
-const filter = ref<LibraryFilter | 'playlists' | 'liked'>('albums')
+const filter = ref<LibraryFilter | 'playlists' | 'liked' | 'favorites' | 'recent' | 'top'>('albums')
 
 const spotifyResults = ref<any[]>([])
 const spotifyPlaylists = ref<any[]>([])
@@ -26,15 +28,15 @@ watch(() => ui.searchTrigger, () => {
   onSearch(ui.searchQuery)
 })
 
+const homeFilter = ref<LibraryFilter | 'favorites' | 'recent' | 'top'>('albums')
+
 onMounted(async () => {
   try {
     const saved: string | null = await invoke('get_setting', { key: 'music_folder' })
     if (saved) {
       lib.scanFolder(saved)
     }
-  } catch {
-    // Ignore
-  }
+  } catch {}
 })
 
 function playTrack(_track: any, idx: number) {
@@ -65,7 +67,7 @@ async function onSearch(query: string) {
     try {
       const res = await spotifyStore.search(query)
       spotifyResults.value = res.tracks.items.map(mapSpotifyTrack)
-      filter.value = 'tracks' // show local tracks, or we could have a combined view
+      filter.value = 'tracks'
     } catch (e) {
       console.error(e)
     } finally {
@@ -89,6 +91,25 @@ async function loadLikedSongs() {
   if (!spotifyStore.accessToken) return
   const res = await spotifyStore.getLikedSongs()
   spotifyLiked.value = res.items.map((i: any) => mapSpotifyTrack(i.track))
+}
+
+function loadFavorites() {
+  filter.value = 'favorites'
+  ui.triggerSearch('')
+  lib.loadRecentlyPlayed()
+  lib.loadMostPlayed()
+}
+
+function loadRecent() {
+  filter.value = 'recent'
+  ui.triggerSearch('')
+  lib.loadRecentlyPlayed()
+}
+
+function loadTop() {
+  filter.value = 'top'
+  ui.triggerSearch('')
+  lib.loadMostPlayed()
 }
 
 async function playPlaylist(id: string) {
@@ -127,6 +148,41 @@ const albumDetail = computed(() => {
     (a: AlbumGroup) => a.artist === selectedAlbum.value!.artist && a.album === selectedAlbum.value!.album
   )
 })
+
+// Favorite tracks from library
+const favoriteTracks = computed<Track[]>(() => {
+  return lib.tracks.filter(t => favorites.isFavorite(t.path))
+})
+
+// Recently played tracks (resolved from paths)
+const recentTracks = computed<Track[]>(() => {
+  return lib.resolveRecords(lib.recentlyPlayed)
+})
+
+// Most played tracks
+const topTracks = computed<Track[]>(() => {
+  return lib.resolveRecords(lib.mostPlayed)
+})
+
+// Favorite albums grouping
+const favoriteAlbums = computed<AlbumGroup[]>(() => {
+  const favTracks = favoriteTracks.value
+  const map = new Map<string, Track[]>()
+  for (const t of favTracks) {
+    const key = `${t.album_artist || t.artist}||${t.album || '(Unknown)'}`
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(t)
+  }
+  return Array.from(map.entries()).map(([key, items]) => {
+    const [artist, album] = key.split('||')
+    items.sort((a, b) => a.disc_number - b.disc_number || a.track_number - b.track_number)
+    return { artist, album, tracks: items, year: items[0]?.year || 0, coverArt: null }
+  }).sort((a, b) => a.album.localeCompare(b.album))
+})
+
+function isFavorite(path: string) {
+  return favorites.isFavorite(path)
+}
 </script>
 
 <template>
@@ -196,14 +252,15 @@ const albumDetail = computed(() => {
               <h1 class="main-title">library</h1>
               <div class="main-stats">{{ lib.tracks.length }} tracks / {{ lib.albums.length }} albums / {{ totalDuration }}</div>
             </div>
-            <div class="head-actions">
-              <!-- Folder setup moved to settings -->
-            </div>
+            <div class="head-actions"></div>
           </div>
           <div class="filters">
             <button :class="['filter-chip', { on: filter === 'albums' }]" @click="filter = 'albums'; ui.triggerSearch('')">ALBUMS</button>
             <button :class="['filter-chip', { on: filter === 'artists' }]" @click="filter = 'artists'; ui.triggerSearch('')">ARTISTS</button>
             <button :class="['filter-chip', { on: filter === 'tracks' }]" @click="filter = 'tracks'; ui.triggerSearch('')">TRACKS</button>
+            <button :class="['filter-chip', { on: filter === 'favorites' }]" @click="loadFavorites">❤️ LIKED</button>
+            <button :class="['filter-chip', { on: filter === 'recent' }]" @click="loadRecent">🕐 RECENT</button>
+            <button :class="['filter-chip', { on: filter === 'top' }]" @click="loadTop">🔥 TOP</button>
             <div class="v-divider" />
             <button :class="['filter-chip', { on: filter === 'playlists' }]" @click="loadPlaylists">PLAYLISTS</button>
             <button :class="['filter-chip', { on: filter === 'liked' }]" @click="loadLikedSongs">LIKED SONGS</button>
@@ -211,50 +268,74 @@ const albumDetail = computed(() => {
         </div>
 
         <div v-if="filter === 'albums'" class="main-scroll">
+          <div class="grid-albums">
+            <div v-for="a in filteredAlbums" :key="a.artist + a.album" @click="viewAlbum(a.artist, a.album)">
+              <AlbumCard :artist="a.artist" :album="a.album" :tracks="a.tracks" :year="a.year" :coverArt="a.coverArt" @playAll="playAlbum" />
+            </div>
+          </div>
+          <div v-if="filteredAlbums.length === 0 && ui.searchQuery" class="empty">no results</div>
+        </div>
+
+        <div v-else-if="filter === 'artists'" class="main-scroll">
+          <div v-for="artist in lib.artists" :key="artist" class="artist-row">{{ artist }}</div>
+        </div>
+
+        <div v-else-if="filter === 'tracks'" class="main-scroll">
+          <div v-if="ui.searchQuery" class="search-header">LOCAL RESULTS</div>
+          <TrackList :tracks="filteredTracks" :showArtist="true" :showAlbum="true" compact @play="playTrack" />
+          <div v-if="ui.searchQuery" class="search-header" style="margin-top:24px">SPOTIFY RESULTS</div>
+          <div v-if="spotifySearching" class="empty" style="padding:10px">searching spotify...</div>
+          <TrackList v-if="ui.searchQuery && spotifyResults.length > 0" :tracks="spotifyResults" :showArtist="true" :showAlbum="true" compact @play="playTrack" />
+        </div>
+
+        <!-- Favorites -->
+        <div v-else-if="filter === 'favorites'" class="main-scroll">
+          <div v-if="favoriteAlbums.length > 0">
+            <h3 class="section-title">❤️ Liked Albums</h3>
             <div class="grid-albums">
-              <div v-for="a in filteredAlbums" :key="a.artist + a.album" @click="viewAlbum(a.artist, a.album)">
+              <div v-for="a in favoriteAlbums" :key="'fav-' + a.artist + a.album" @click="viewAlbum(a.artist, a.album)">
                 <AlbumCard :artist="a.artist" :album="a.album" :tracks="a.tracks" :year="a.year" :coverArt="a.coverArt" @playAll="playAlbum" />
               </div>
             </div>
-            <div v-if="filteredAlbums.length === 0 && ui.searchQuery" class="empty">no results</div>
+            <h3 class="section-title" style="margin-top:24px">❤️ Liked Tracks</h3>
+            <TrackList :tracks="favoriteTracks" :showArtist="true" :showAlbum="true" compact @play="playTrack" />
           </div>
-  
-          <div v-else-if="filter === 'artists'" class="main-scroll">
-            <div v-for="artist in lib.artists" :key="artist" class="artist-row">
-              {{ artist }}
-            </div>
-          </div>
-  
-          <div v-else-if="filter === 'tracks'" class="main-scroll">
-            <div v-if="ui.searchQuery" class="search-header">LOCAL RESULTS</div>
-            <TrackList :tracks="filteredTracks" :showArtist="true" :showAlbum="true" compact @play="playTrack" />
-            
-            <div v-if="ui.searchQuery" class="search-header" style="margin-top: 24px">SPOTIFY RESULTS</div>
-            <div v-if="spotifySearching" class="empty" style="padding: 10px">searching spotify...</div>
-            <TrackList v-if="ui.searchQuery && spotifyResults.length > 0" :tracks="spotifyResults" :showArtist="true" :showAlbum="true" compact @play="playTrack" />
-          </div>
+          <div v-else class="empty">no favorites yet. heart a track to add it.</div>
+        </div>
 
-          <div v-else-if="filter === 'playlists'" class="main-scroll">
-            <div v-if="!spotifyStore.accessToken" class="empty">spotify is not connected. go to settings.</div>
-            <div class="grid-albums">
-              <div v-for="p in spotifyPlaylists" :key="p.id" class="playlist-card" @click="playPlaylist(p.id)">
-                <div class="p-cover" :style="{ backgroundImage: `url(${p.images?.[0]?.url})` }" />
-                <div class="p-info">
-                  <div class="p-title">{{ p.name }}</div>
-                  <div class="p-owner">{{ p.owner.display_name }}</div>
-                </div>
+        <!-- Recently Played -->
+        <div v-else-if="filter === 'recent'" class="main-scroll">
+          <h3 class="section-title">🕐 Recently Played</h3>
+          <TrackList v-if="recentTracks.length > 0" :tracks="recentTracks" :showArtist="true" :showAlbum="true" compact @play="playTrack" />
+          <div v-else class="empty">no tracks played yet.</div>
+        </div>
+
+        <!-- Most Played -->
+        <div v-else-if="filter === 'top'" class="main-scroll">
+          <h3 class="section-title">🔥 Most Played</h3>
+          <TrackList v-if="topTracks.length > 0" :tracks="topTracks" :showArtist="true" :showAlbum="true" compact @play="playTrack" />
+          <div v-else class="empty">no tracks played yet.</div>
+        </div>
+
+        <div v-else-if="filter === 'playlists'" class="main-scroll">
+          <div v-if="!spotifyStore.accessToken" class="empty">spotify is not connected. go to settings.</div>
+          <div class="grid-albums">
+            <div v-for="p in spotifyPlaylists" :key="p.id" class="playlist-card" @click="playPlaylist(p.id)">
+              <div class="p-cover" :style="{ backgroundImage: `url(${p.images?.[0]?.url})` }" />
+              <div class="p-info">
+                <div class="p-title">{{ p.name }}</div>
+                <div class="p-owner">{{ p.owner.display_name }}</div>
               </div>
             </div>
           </div>
-
-          <div v-else-if="filter === 'liked'" class="main-scroll">
-            <div v-if="!spotifyStore.accessToken" class="empty">spotify is not connected. go to settings.</div>
-            <TrackList v-else :tracks="spotifyLiked" :showArtist="true" :showAlbum="true" compact @play="playTrack" />
-          </div>
         </div>
-      </template>
 
-    <!-- Removed old center-state -->
+        <div v-else-if="filter === 'liked'" class="main-scroll">
+          <div v-if="!spotifyStore.accessToken" class="empty">spotify is not connected. go to settings.</div>
+          <TrackList v-else :tracks="spotifyLiked" :showArtist="true" :showAlbum="true" compact @play="playTrack" />
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -272,21 +353,11 @@ const albumDetail = computed(() => {
   gap: 16px;
   max-width: 400px;
 }
-.empty-hero h2 {
-  font-size: 24px;
-  font-weight: 800;
-  color: var(--foreground);
-}
-.empty-hero p {
-  font-size: 14px;
-  color: var(--text-muted);
-}
-.empty-hero p strong {
-  color: var(--main);
-}
+.empty-hero h2 { font-size: 24px; font-weight: 800; color: var(--foreground); }
+.empty-hero p { font-size: 14px; color: var(--text-muted); }
+.empty-hero p strong { color: var(--main); }
 .empty-icon {
-  width: 64px;
-  height: 64px;
+  width: 64px; height: 64px;
   background: var(--panel-bg-hover);
   border-radius: 50%;
   display: flex;
@@ -295,10 +366,7 @@ const albumDetail = computed(() => {
   color: var(--text-muted);
   margin-bottom: 8px;
 }
-.empty-icon svg {
-  width: 32px;
-  height: 32px;
-}
+.empty-icon svg { width: 32px; height: 32px; }
 
 .center-state {
   flex: 1;
@@ -309,22 +377,18 @@ const albumDetail = computed(() => {
   color: color-mix(in srgb, var(--foreground) 50%, transparent);
 }
 .spinner {
-  width: 24px;
-  height: 24px;
+  width: 24px; height: 24px;
   color: var(--main);
   animation: spin 1s linear infinite;
   margin: 0 auto 12px;
 }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
-
-
 .main {
   height: 100%;
   display: flex;
   flex-direction: column;
 }
-
 .main-head {
   padding: 24px 24px 0;
   flex-shrink: 0;
@@ -345,36 +409,13 @@ const albumDetail = computed(() => {
   font-size: 11px;
   color: color-mix(in srgb, var(--foreground) 40%, transparent);
 }
-
-.head-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.btn-icon {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--secondary-background);
-  border: 2px solid var(--border);
-  border-radius: var(--radius-base);
-  color: var(--foreground);
-  cursor: pointer;
-  box-shadow: 2px 2px 0px 0px var(--border);
-  transition: all 0.15s;
-}
-.btn-icon svg { width: 16px; height: 16px; }
-.btn-icon:hover {
-  box-shadow: none;
-  transform: translate(2px, 2px);
-}
+.head-actions { display: flex; align-items: center; gap: 12px; }
 
 .filters {
   display: flex;
   gap: 8px;
   padding-bottom: 16px;
+  flex-wrap: wrap;
 }
 .filter-chip {
   padding: 6px 16px;
@@ -389,33 +430,18 @@ const albumDetail = computed(() => {
   box-shadow: var(--shadow);
   transition: all 0.15s;
 }
-.filter-chip:hover {
-  box-shadow: none;
-  transform: translate(4px, 4px);
-}
-.filter-chip.on {
-  background: var(--main);
-  color: var(--main-foreground);
-  box-shadow: none;
-  transform: translate(4px, 4px);
-}
+.filter-chip:hover { box-shadow: none; transform: translate(4px, 4px); }
+.filter-chip.on { background: var(--main); color: var(--main-foreground); box-shadow: none; transform: translate(4px, 4px); }
 
-.main-scroll {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 24px 24px;
-}
+.main-scroll { flex: 1; overflow-y: auto; padding: 0 24px 24px; }
+.grid-albums { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
+.empty { text-align: center; padding: 40px; color: color-mix(in srgb, var(--foreground) 40%, transparent); }
 
-.grid-albums {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 16px;
-}
-
-.empty {
-  text-align: center;
-  padding: 40px;
-  color: color-mix(in srgb, var(--foreground) 40%, transparent);
+.section-title {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  color: var(--foreground);
 }
 
 .artist-row {
@@ -424,115 +450,41 @@ const albumDetail = computed(() => {
   cursor: pointer;
   font-weight: 600;
 }
-.artist-row:hover {
-  background: var(--secondary-background);
-}
+.artist-row:hover { background: var(--secondary-background); }
 
-.detail {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-.detail-hero {
-  padding: 24px;
-  border-bottom: 2px solid var(--border);
-}
+.detail { height: 100%; display: flex; flex-direction: column; }
+.detail-hero { padding: 24px; border-bottom: 2px solid var(--border); }
 .btn-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font);
-  font-size: 11px;
-  font-weight: 700;
-  background: transparent;
-  border: none;
-  color: var(--foreground);
-  cursor: pointer;
-  margin-bottom: 20px;
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font); font-size: 11px; font-weight: 700;
+  background: transparent; border: none; color: var(--foreground);
+  cursor: pointer; margin-bottom: 20px;
 }
 .btn-back svg { width: 16px; height: 16px; }
 .btn-back:hover { color: var(--main); }
 
-.detail-flex {
-  display: flex;
-  gap: 24px;
-  align-items: flex-end;
-}
+.detail-flex { display: flex; gap: 24px; align-items: flex-end; }
 .detail-art {
-  width: 180px;
-  height: 180px;
-  border: 2px solid var(--border);
-  border-radius: var(--radius-base);
-  box-shadow: var(--shadow);
-  background: var(--secondary-background);
-  overflow: hidden;
-  flex-shrink: 0;
+  width: 180px; height: 180px;
+  border: 2px solid var(--border); border-radius: var(--radius-base);
+  box-shadow: var(--shadow); background: var(--secondary-background);
+  overflow: hidden; flex-shrink: 0;
 }
-.detail-art-img {
-  width: 100%;
-  height: 100%;
-  background-size: cover;
-  background-position: center;
-}
-.detail-art-empty {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.detail-art-empty svg {
-  width: 48px;
-  height: 48px;
-  color: color-mix(in srgb, var(--foreground) 30%, transparent);
-}
+.detail-art-img { width: 100%; height: 100%; background-size: cover; background-position: center; }
+.detail-art-empty { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.detail-art-empty svg { width: 48px; height: 48px; color: color-mix(in srgb, var(--foreground) 30%, transparent); }
 
-.detail-info {
-  min-width: 0;
-}
-.detail-type {
-  font-size: 10px;
-  font-weight: 700;
-  color: color-mix(in srgb, var(--foreground) 40%, transparent);
-}
-.detail-title {
-  font-size: 32px;
-  font-weight: 800;
-  line-height: 1.1;
-  margin: 8px 0;
-}
-.detail-meta {
-  font-size: 13px;
-  color: color-mix(in srgb, var(--foreground) 60%, transparent);
-  margin-bottom: 16px;
-}
-.detail-artist {
-  color: var(--foreground);
-  font-weight: 700;
-}
-.detail-play {
-  padding: 10px 24px;
-  font-size: 12px;
-}
+.detail-info { min-width: 0; }
+.detail-type { font-size: 10px; font-weight: 700; color: color-mix(in srgb, var(--foreground) 40%, transparent); }
+.detail-title { font-size: 32px; font-weight: 800; line-height: 1.1; margin: 8px 0; }
+.detail-meta { font-size: 13px; color: color-mix(in srgb, var(--foreground) 60%, transparent); margin-bottom: 16px; }
+.detail-artist { color: var(--foreground); font-weight: 700; }
+.detail-play { padding: 10px 24px; font-size: 12px; }
 .detail-play svg { width: 14px; height: 14px; }
+.detail-tracks { flex: 1; overflow-y: auto; }
 
-.detail-tracks {
-  flex: 1;
-  overflow-y: auto;
-}
-
-.v-divider {
-  width: 2px;
-  background: var(--border);
-  margin: 0 4px;
-}
-
-.search-header {
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--main);
-  margin-bottom: 12px;
-}
+.v-divider { width: 2px; background: var(--border); margin: 0 4px; }
+.search-header { font-size: 14px; font-weight: 800; color: var(--main); margin-bottom: 12px; }
 
 .playlist-card {
   background: var(--secondary-background);
@@ -543,30 +495,15 @@ const albumDetail = computed(() => {
   box-shadow: 2px 2px 0px 0px var(--border);
   transition: all 0.15s;
 }
-.playlist-card:hover {
-  transform: translate(2px, 2px);
-  box-shadow: none;
-}
+.playlist-card:hover { transform: translate(2px, 2px); box-shadow: none; }
 .p-cover {
-  width: 100%;
-  aspect-ratio: 1;
-  background-size: cover;
-  background-position: center;
+  width: 100%; aspect-ratio: 1;
+  background-size: cover; background-position: center;
   border: 2px solid var(--border);
   border-radius: calc(var(--radius-base) - 2px);
   margin-bottom: 12px;
   background-color: var(--background);
 }
-.p-title {
-  font-weight: 700;
-  font-size: 13px;
-  margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.p-owner {
-  font-size: 11px;
-  color: color-mix(in srgb, var(--foreground) 60%, transparent);
-}
+.p-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-owner { font-size: 11px; color: color-mix(in srgb, var(--foreground) 60%, transparent); }
 </style>

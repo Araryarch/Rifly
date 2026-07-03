@@ -5,6 +5,7 @@
   --background: #000000;
   --panel-bg: #121212;
   --panel-bg-hover: #1f1f1f;
+  --secondary-background: #1a1a1a;
   --foreground: #ffffff;
   --text-muted: #b3b3b3;
   --main: #1ed760; /* Spotify Green or similar accent */
@@ -13,8 +14,10 @@
   --ring: #ffffff;
   --overlay: rgba(0,0,0,0.8);
   --shadow: 0 8px 24px rgba(0,0,0,0.5);
+  --gold: #d4af37;
+  --radius-base: 8px;
   --font: 'JetBrainsMono Nerd Font', 'JetBrains Mono', 'Circular', 'Inter', 'Helvetica Neue', sans-serif;
-  --sidebar-width: 240px; /* Expanded with menus */
+  --sidebar-width: 240px;
   --right-panel-width: 320px;
   --player-height: 90px;
   --topbar-height: 64px;

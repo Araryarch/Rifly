@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { usePlayerStore } from '../stores/player'
 import type { ViewName } from '../types'
 
@@ -8,6 +9,30 @@ const emit = defineEmits<{ 'update:view': [view: ViewName] }>()
 
 const player = usePlayerStore()
 const isActive = computed(() => (v: ViewName) => props.view === v)
+
+async function openMiniPlayer() {
+  try {
+    const existing = WebviewWindow.getByLabel('mini-player')
+    if (existing) {
+      await existing.show()
+      await existing.setFocus()
+      return
+    }
+    const mini = new WebviewWindow('mini-player', {
+      url: '/?mini=1',
+      title: 'Rifly Mini',
+      width: 320,
+      height: 480,
+      minWidth: 280,
+      minHeight: 400,
+      decorations: false,
+      alwaysOnTop: true,
+      resizable: false,
+    })
+    mini.once('tauri://created', () => {})
+    mini.once('tauri://error', () => {})
+  } catch {}
+}
 </script>
 
 <template>
@@ -67,6 +92,11 @@ const isActive = computed(() => (v: ViewName) => props.view === v)
         <span>Queue</span>
         <span v-if="player.queue.length > 0" class="nav-badge">{{ player.queue.length }}</span>
       </button>
+
+      <button class="nav-item" @click="openMiniPlayer" title="Mini Player">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M12 17v4M8 21h8"/><rect x="12" y="11" width="6" height="4" rx="1"/></svg>
+        <span>Mini Player</span>
+      </button>
     </div>
 
     <div class="nav-divider" />
@@ -107,32 +137,11 @@ const isActive = computed(() => (v: ViewName) => props.view === v)
   color: var(--foreground);
   letter-spacing: -0.5px;
 }
-.brand svg {
-  width: 22px;
-  height: 22px;
-  color: var(--main);
-}
+.brand svg { width: 22px; height: 22px; color: var(--main); }
 
-.nav-section {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.nav-label {
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
-  color: var(--text-muted);
-  padding: 8px 16px 4px;
-}
-
-.nav-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 6px 8px;
-}
+.nav-section { display: flex; flex-direction: column; gap: 2px; }
+.nav-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-muted); padding: 8px 16px 4px; }
+.nav-divider { height: 1px; background: var(--border); margin: 6px 8px; }
 
 .nav-item {
   display: flex;
@@ -152,29 +161,17 @@ const isActive = computed(() => (v: ViewName) => props.view === v)
   text-align: left;
   position: relative;
 }
-.nav-item:hover {
-  color: var(--foreground);
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
-}
-.nav-item.active {
-  color: var(--foreground);
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-}
-.nav-item svg {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
+.nav-item:hover { color: var(--foreground); background: color-mix(in srgb, var(--foreground) 6%, transparent); }
+.nav-item.active { color: var(--foreground); background: color-mix(in srgb, var(--foreground) 8%, transparent); }
+.nav-item svg { width: 20px; height: 20px; flex-shrink: 0; }
 
 .nav-indicator {
-  width: 8px;
-  height: 8px;
+  width: 8px; height: 8px;
   border-radius: 50%;
   background: var(--main);
   margin-left: auto;
   animation: pulse 1.5s ease infinite;
 }
-
 .nav-badge {
   margin-left: auto;
   font-size: 11px;
@@ -188,9 +185,5 @@ const isActive = computed(() => (v: ViewName) => props.view === v)
   min-width: 20px;
   text-align: center;
 }
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 </style>

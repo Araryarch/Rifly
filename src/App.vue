@@ -113,6 +113,7 @@ function applyTheme(mode: string) {
     document.documentElement.style.setProperty('--background', '#f5f5f5')
     document.documentElement.style.setProperty('--panel-bg', '#ffffff')
     document.documentElement.style.setProperty('--panel-bg-hover', '#eeeeee')
+    document.documentElement.style.setProperty('--secondary-background', '#f0f0f0')
     document.documentElement.style.setProperty('--foreground', '#000000')
     document.documentElement.style.setProperty('--text-muted', '#666666')
     document.documentElement.style.setProperty('--border', '#dddddd')

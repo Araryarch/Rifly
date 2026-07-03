@@ -28,6 +28,42 @@ const discordBtn1Url = ref('')
 const discordBtn2Label = ref('')
 const discordBtn2Url = ref('')
 
+const themeMode = ref('dark')
+
+async function loadTheme() {
+  try {
+    const saved = await invoke<string | null>('get_setting', { key: 'theme' })
+    themeMode.value = saved || 'dark'
+  } catch { themeMode.value = 'dark' }
+}
+
+function applyTheme(mode: string) {
+  if (mode === 'light') {
+    document.documentElement.style.setProperty('--background', '#f5f5f5')
+    document.documentElement.style.setProperty('--panel-bg', '#ffffff')
+    document.documentElement.style.setProperty('--panel-bg-hover', '#eeeeee')
+    document.documentElement.style.setProperty('--foreground', '#000000')
+    document.documentElement.style.setProperty('--text-muted', '#666666')
+    document.documentElement.style.setProperty('--border', '#dddddd')
+    document.documentElement.style.setProperty('--ring', '#000000')
+    document.documentElement.style.setProperty('--overlay', 'rgba(255,255,255,0.8)')
+  } else {
+    document.documentElement.style.setProperty('--background', '#000000')
+    document.documentElement.style.setProperty('--panel-bg', '#121212')
+    document.documentElement.style.setProperty('--panel-bg-hover', '#1f1f1f')
+    document.documentElement.style.setProperty('--foreground', '#ffffff')
+    document.documentElement.style.setProperty('--text-muted', '#b3b3b3')
+    document.documentElement.style.setProperty('--border', 'transparent')
+    document.documentElement.style.setProperty('--ring', '#ffffff')
+    document.documentElement.style.setProperty('--overlay', 'rgba(0,0,0,0.8)')
+  }
+}
+
+watch(themeMode, (v) => {
+  applyTheme(v)
+  invoke('set_setting', { key: 'theme', value: v })
+})
+
 const dcKeys = {
   enabled: 'discord_enabled',
   hideAll: 'discord_hide_everything',
@@ -87,6 +123,7 @@ onMounted(async () => {
   clientIdInput.value = spotify.clientId
   pathInput.value = lib.musicFolder
   await loadDiscordSettings()
+  await loadTheme()
 })
 
 async function pickFolder() {
@@ -204,6 +241,20 @@ async function connect() {
           </div>
           <div class="status-desc">
             {{ spotify.ready ? 'Device "Rifly" is ready.' : 'Initializing virtual device...' }}
+          </div>
+        </div>
+      </div>
+
+      <div class="card animate-fade-in" style="margin-top: 24px">
+        <h2 class="card-title">Appearance</h2>
+        <p class="card-desc">
+          Switch between dark and light mode.
+        </p>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label>THEME</label>
+          <div style="display: flex; gap: 8px">
+            <button :class="['btn-half', { on: themeMode === 'dark' }]" @click="themeMode = 'dark'">DARK</button>
+            <button :class="['btn-half', { on: themeMode === 'light' }]" @click="themeMode = 'light'">LIGHT</button>
           </div>
         </div>
       </div>
@@ -406,6 +457,22 @@ async function connect() {
   font-weight: 700;
   color: #ff4444;
 }
+
+.btn-half {
+  flex: 1;
+  background: var(--secondary-background);
+  color: var(--foreground);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-base);
+  padding: 10px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-half:hover { box-shadow: none; transform: translate(2px, 2px); }
+.btn-half.on { background: var(--main); color: var(--main-foreground); box-shadow: none; transform: translate(2px, 2px); }
 
 .status-box {
   margin-top: 24px;

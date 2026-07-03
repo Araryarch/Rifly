@@ -108,8 +108,8 @@ fn run_loop(player: Arc<Mutex<Player>>, settings_path: std::path::PathBuf, shutd
     let mut client: Option<DiscordIpcClient> = None;
     let mut last_track_path = String::new();
     let mut last_state = PlaybackState::Stopped;
-    let mut last_quality = String::new();
-    let mut last_settings_raw = String::new();
+    let last_quality = String::new();
+    let last_settings_raw = String::new();
     let mut delay = RECONNECT_BASE_MS;
 
     while !shutdown.load(Ordering::SeqCst) {

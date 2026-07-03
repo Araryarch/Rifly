@@ -12,7 +12,7 @@ const isActive = computed(() => (v: ViewName) => props.view === v)
 
 async function openMiniPlayer() {
   try {
-    const existing = WebviewWindow.getByLabel('mini-player')
+    const existing = await WebviewWindow.getByLabel('mini-player')
     if (existing) {
       await existing.show()
       await existing.setFocus()

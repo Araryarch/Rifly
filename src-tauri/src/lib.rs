@@ -11,7 +11,6 @@ use commands::AppState;
 use engine::player::Player;
 use services::discord::DiscordService;
 use tauri::{Manager, Emitter};
-use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem};
 
 fn start_position_emitter(app: tauri::AppHandle) {
@@ -64,9 +63,8 @@ pub fn run() {
             start_position_emitter(handle.clone());
 
             // --- System Tray ---
-            let icon_bytes = include_bytes!("../icons/32x32.png");
-            let tray_icon = Image::from_bytes(icon_bytes)
-                .expect("Failed to load tray icon");
+            let tray_icon = app.default_window_icon().cloned()
+                .expect("No default window icon configured");
 
             let show_item = MenuItem::with_id(&handle, "show", "Show", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(&handle, "quit", "Quit", true, None::<&str>)?;
@@ -90,23 +88,7 @@ pub fn run() {
                         _ => {}
                     }
                 })
-                .on_left_click(move |event| {
-                    if let Some(app) = event.app_handle() {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
-                })
                 .build(app)?;
-
-            // Minimize to tray on close
-            app.on_window_event(move |window, event| {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
-            });
 
             Ok(())
         })

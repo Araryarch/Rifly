@@ -28,8 +28,6 @@ watch(() => ui.searchTrigger, () => {
   onSearch(ui.searchQuery)
 })
 
-const homeFilter = ref<LibraryFilter | 'favorites' | 'recent' | 'top'>('albums')
-
 onMounted(async () => {
   try {
     const saved: string | null = await invoke('get_setting', { key: 'music_folder' })
@@ -180,9 +178,6 @@ const favoriteAlbums = computed<AlbumGroup[]>(() => {
   }).sort((a, b) => a.album.localeCompare(b.album))
 })
 
-function isFavorite(path: string) {
-  return favorites.isFavorite(path)
-}
 </script>
 
 <template>

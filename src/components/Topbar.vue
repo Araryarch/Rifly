@@ -30,11 +30,20 @@ function toggleMaximize() {
 function closeWindow() {
   appWindow.close()
 }
+
+function startDrag(e: MouseEvent) {
+  // Prevent drag if clicking on an interactive element
+  const target = e.target as HTMLElement
+  if (target.closest('button') || target.closest('input') || target.closest('.avatar') || target.closest('.search-box')) {
+    return
+  }
+  appWindow.startDragging()
+}
 </script>
 
 <template>
-  <header class="topbar" data-tauri-drag-region>
-    <div class="t-left" data-tauri-drag-region>
+  <header class="topbar" @mousedown="startDrag">
+    <div class="t-left">
       <button class="nav-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
@@ -43,7 +52,7 @@ function closeWindow() {
       </button>
     </div>
 
-    <div class="t-center" data-tauri-drag-region>
+    <div class="t-center">
       <button class="home-btn" @click="handleHome">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 8h-3v8h-4v-6h-4v6H6v-8H3l9-8z"/></svg>
       </button>
@@ -60,7 +69,7 @@ function closeWindow() {
       </div>
     </div>
 
-    <div class="t-right" data-tauri-drag-region>
+    <div class="t-right">
       <button class="nav-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       </button>

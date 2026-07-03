@@ -1,16 +1,41 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-dialog'
 import { useSpotifyStore } from '../stores/spotify'
+import { useLibraryStore } from '../stores/library'
 
 const spotify = useSpotifyStore()
+const lib = useLibraryStore()
 const clientIdInput = ref('')
+const pathInput = ref('')
 const loading = ref(false)
 const error = ref('')
 
 onMounted(async () => {
   await spotify.init()
   clientIdInput.value = spotify.clientId
+  pathInput.value = lib.musicFolder
 })
+
+async function pickFolder() {
+  const selected = await open({
+    directory: true,
+    title: 'Select Music Folder',
+  })
+  if (selected && typeof selected === 'string') {
+    lib.scanFolder(selected)
+    invoke('set_setting', { key: 'music_folder', value: selected })
+    pathInput.value = selected
+  }
+}
+
+async function setFolderManual() {
+  const p = pathInput.value.trim()
+  if (!p) return
+  lib.scanFolder(p)
+  invoke('set_setting', { key: 'music_folder', value: p })
+}
 
 async function connect() {
   if (!clientIdInput.value.trim()) {
@@ -38,6 +63,36 @@ async function connect() {
     </div>
 
     <div class="s-content">
+      <div class="card animate-fade-in" style="margin-bottom: 24px">
+        <h2 class="card-title">Local Library</h2>
+        <p class="card-desc">
+          Set the folder where your local music files (FLAC, MP3, WAV, etc.) are stored.
+        </p>
+
+        <div v-if="lib.musicFolder" class="connected-badge" style="margin-bottom: 16px; border-color: var(--border); background: transparent; color: var(--foreground); font-weight: normal; font-size: 11px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted)"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          {{ lib.musicFolder }}
+        </div>
+        
+        <button class="btn-primary" @click="pickFolder" style="margin-bottom: 12px">
+          BROWSE FOLDER
+        </button>
+
+        <div class="form-group" style="margin-bottom: 0;">
+          <label>OR TYPE PATH MANUALLY</label>
+          <div style="display: flex; gap: 8px">
+            <input 
+              v-model="pathInput" 
+              type="text" 
+              class="input" 
+              placeholder="C:\Music" 
+              @keydown.enter="setFolderManual"
+            />
+            <button class="btn-primary" @click="setFolderManual" style="width: auto; padding: 0 24px;">SET</button>
+          </div>
+        </div>
+      </div>
+
       <div class="card animate-fade-in">
         <h2 class="card-title">Spotify Integration</h2>
         <p class="card-desc">

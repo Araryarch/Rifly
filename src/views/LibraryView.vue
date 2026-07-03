@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { open } from '@tauri-apps/plugin-dialog'
 import { useLibraryStore } from '../stores/library'
 import { usePlayerStore } from '../stores/player'
 import { useSpotifyStore, mapSpotifyTrack } from '../stores/spotify'
@@ -16,8 +15,6 @@ const spotifyStore = useSpotifyStore()
 const ui = useUiStore()
 
 const selectedAlbum = ref<{ artist: string; album: string } | null>(null)
-const showPathInput = ref(false)
-const pathInput = ref('')
 const filter = ref<LibraryFilter | 'playlists' | 'liked'>('albums')
 
 const spotifyResults = ref<any[]>([])
@@ -33,35 +30,12 @@ onMounted(async () => {
   try {
     const saved: string | null = await invoke('get_setting', { key: 'music_folder' })
     if (saved) {
-      showPathInput.value = false
       lib.scanFolder(saved)
-    } else {
-      showPathInput.value = true
     }
   } catch {
-    showPathInput.value = true
+    // Ignore
   }
 })
-
-async function pickFolder() {
-  const selected = await open({
-    directory: true,
-    title: 'Select Music Folder',
-  })
-  if (selected && typeof selected === 'string') {
-    lib.scanFolder(selected)
-    invoke('set_setting', { key: 'music_folder', value: selected })
-    showPathInput.value = false
-  }
-}
-
-async function setFolderManual() {
-  const p = pathInput.value.trim()
-  if (!p) return
-  lib.scanFolder(p)
-  invoke('set_setting', { key: 'music_folder', value: p })
-  showPathInput.value = false
-}
 
 function playTrack(_track: any, idx: number) {
   if (player.source === 'spotify') {
@@ -157,26 +131,13 @@ const albumDetail = computed(() => {
 
 <template>
   <div class="lib">
-    <div v-if="showPathInput" class="welcome">
-      <div class="welcome-card animate-fade-in-up">
-        <div class="w-head">// rifly</div>
-        <p class="w-desc">where is your music?</p>
-        
-        <button class="btn-primary w-btn" @click="pickFolder">OPEN FOLDER</button>
-
-        <div class="w-manual">
-          <p class="w-hint">or type path manually:</p>
-          <div class="w-row">
-            <input
-              v-model="pathInput"
-              type="text"
-              placeholder="C:\Music"
-              class="w-input"
-              @keydown.enter="setFolderManual"
-            />
-            <button class="w-set" @click="setFolderManual">SET</button>
-          </div>
+    <div v-if="!lib.scanning && lib.tracks.length === 0" class="center-state">
+      <div class="empty-hero animate-fade-in-up">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
         </div>
+        <h2>Your library is empty</h2>
+        <p>Go to <strong>Settings</strong> in the sidebar to connect your local music folder.</p>
       </div>
     </div>
 
@@ -236,9 +197,7 @@ const albumDetail = computed(() => {
               <div class="main-stats">{{ lib.tracks.length }} tracks / {{ lib.albums.length }} albums / {{ totalDuration }}</div>
             </div>
             <div class="head-actions">
-              <button class="btn-icon" @click="showPathInput = true; pathInput = lib.musicFolder">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-              </button>
+              <!-- Folder setup moved to settings -->
             </div>
           </div>
           <div class="filters">
@@ -295,12 +254,7 @@ const albumDetail = computed(() => {
         </div>
       </template>
 
-    <div v-else class="center-state">
-      <div class="animate-fade-in-up">
-        <p>no music found</p>
-        <button class="btn-link" @click="showPathInput = true">change folder</button>
-      </div>
-    </div>
+    <!-- Removed old center-state -->
   </div>
 </template>
 
@@ -311,96 +265,39 @@ const albumDetail = computed(() => {
   flex-direction: column;
 }
 
-.welcome {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.welcome-card {
+.empty-hero {
   display: flex;
   flex-direction: column;
-  max-width: 420px;
-  width: 100%;
-  padding: 32px;
-  background: var(--panel-bg-hover);
-  border-radius: var(--radius-base);
+  align-items: center;
+  gap: 16px;
+  max-width: 400px;
 }
-
-.w-head {
+.empty-hero h2 {
   font-size: 24px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--foreground);
-  margin-bottom: 4px;
 }
-.w-desc {
+.empty-hero p {
   font-size: 14px;
   color: var(--text-muted);
-  margin-bottom: 24px;
 }
-
-.btn-primary {
-  background: var(--foreground);
-  color: #000;
-  border: none;
-  border-radius: 24px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.1s;
-  display: inline-flex;
+.empty-hero p strong {
+  color: var(--main);
+}
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  background: var(--panel-bg-hover);
+  border-radius: 50%;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-}
-.btn-primary:hover {
-  transform: scale(1.04);
-}
-
-.w-btn {
-  padding: 16px;
-  font-size: 16px;
-  width: 100%;
-  margin-bottom: 24px;
-}
-
-.w-manual {
-  border-top: 1px solid rgba(255,255,255,0.1);
-  padding-top: 16px;
-}
-.w-hint {
-  font-size: 12px;
   color: var(--text-muted);
   margin-bottom: 8px;
 }
-.w-row {
-  display: flex;
-}
-.w-input {
-  flex: 1;
-  background: rgba(255,255,255,0.05);
-  border: none;
-  border-radius: 4px 0 0 4px;
-  padding: 10px 12px;
-  color: var(--foreground);
-  outline: none;
-}
-.w-input:focus {
-  background: rgba(255,255,255,0.1);
-}
-.w-set {
-  background: rgba(255,255,255,0.1);
-  color: var(--foreground);
-  border: none;
-  border-radius: 0 4px 4px 0;
-  padding: 0 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.1s;
-}
-.w-set:hover {
-  background: rgba(255,255,255,0.15);
+.empty-icon svg {
+  width: 32px;
+  height: 32px;
 }
 
 .center-state {
@@ -420,15 +317,7 @@ const albumDetail = computed(() => {
 }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
-.btn-link {
-  background: transparent;
-  border: none;
-  color: var(--main);
-  text-decoration: underline;
-  cursor: pointer;
-  font-family: var(--font);
-  margin-top: 8px;
-}
+
 
 .main {
   height: 100%;

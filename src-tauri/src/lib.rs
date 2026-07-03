@@ -1,4 +1,5 @@
-mod commands;
+#![allow(dead_code)]
+pub mod commands;
 mod domain;
 mod engine;
 mod infrastructure;

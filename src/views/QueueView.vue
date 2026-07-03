@@ -1,9 +1,26 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { formatTime } from '../types'
 import EqBars from '../components/EqBars.vue'
 
 const player = usePlayerStore()
+const dragIdx = ref<number | null>(null)
+
+function onDragStart(idx: number) {
+  dragIdx.value = idx
+}
+
+function onDragOver(e: DragEvent, idx: number) {
+  e.preventDefault()
+  if (dragIdx.value === null || dragIdx.value === idx) return
+  player.moveInQueue(dragIdx.value, idx)
+  dragIdx.value = idx
+}
+
+function onDragEnd() {
+  dragIdx.value = null
+}
 </script>
 
 <template>
@@ -48,8 +65,16 @@ const player = usePlayerStore()
           :key="track.path + idx"
           v-show="idx !== player.queueIndex"
           class="q-item"
+          :class="{ 'drag-over': dragIdx !== null && dragIdx !== idx }"
+          draggable="true"
+          @dragstart="onDragStart(idx)"
+          @dragover="onDragOver($event, idx)"
+          @dragend="onDragEnd"
           @dblclick="player.playIndex(idx)"
         >
+          <div class="qi-handle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="8" y2="10"/><line x1="8" y1="14" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="10"/><line x1="16" y1="14" x2="16" y2="18"/></svg>
+          </div>
           <div class="qi-num">{{ idx + 1 }}</div>
           <div class="qi-info">
             <div class="qi-title">{{ track.title }}</div>
@@ -156,16 +181,20 @@ const player = usePlayerStore()
 .q-item {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   padding: 8px;
   border: 2px solid transparent;
   border-radius: var(--radius-base);
   cursor: pointer;
-  transition: background 0.1s;
+  transition: all 0.1s;
 }
 .q-item:hover {
   background: var(--secondary-background);
   border-color: var(--border);
+}
+.q-item.drag-over {
+  border-color: var(--main);
+  background: color-mix(in srgb, var(--main) 10%, transparent);
 }
 
 .q-item.playing {
@@ -175,6 +204,21 @@ const player = usePlayerStore()
 .q-item.playing:hover {
   background: color-mix(in srgb, var(--main) 20%, transparent);
 }
+
+.qi-handle {
+  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--foreground) 30%, transparent);
+  cursor: grab;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.qi-handle svg { width: 14px; height: 14px; }
+.q-item:hover .qi-handle { opacity: 1; }
+.qi-handle:active { cursor: grabbing; }
 
 .qi-eq {
   width: 24px;

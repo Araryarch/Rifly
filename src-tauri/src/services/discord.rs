@@ -102,88 +102,7 @@ fn get_settings(path: &std::path::Path) -> HashMap<String, String> {
         .unwrap_or_default()
 }
 
-fn build_activity<'a>(
-    t: &'a Track,
-    pos: f64,
-    dur: f64,
-    is_paused: bool,
-    settings: &'a HashMap<String, String>,
-) -> activity::Activity<'a> {
-    let show_title = settings.get("discord_show_title").map(|v| v == "true").unwrap_or(true);
-    let show_artist = settings.get("discord_show_artist").map(|v| v == "true").unwrap_or(true);
-    let show_album = settings.get("discord_show_album").map(|v| v == "true").unwrap_or(true);
-    let show_quality = settings.get("discord_show_audio_quality").map(|v| v == "true").unwrap_or(true);
-    let show_progress = settings.get("discord_show_playback_progress").map(|v| v == "true").unwrap_or(true);
-    let audiophile = settings.get("discord_audiophile_mode").map(|v| v == "true").unwrap_or(false);
-
-    let mut act = activity::Activity::new()
-        .activity_type(activity::ActivityType::Listening);
-
-    if audiophile {
-        let (first, second) = match (show_title, show_artist) {
-            (true, true) => (
-                Some(format!("{} — {}", t.artist, t.title)),
-                Some(format!("{} • Bit Perfect ✓", quality_text(t))),
-            ),
-            (true, false) => (
-                Some(t.title.clone()),
-                Some(format!("{} • Bit Perfect ✓", quality_text(t))),
-            ),
-            (false, true) => (
-                Some(t.artist.clone()),
-                Some(format!("{} • Bit Perfect ✓", quality_text(t))),
-            ),
-            (false, false) => (None, Some(format!("{} • Bit Perfect ✓", quality_text(t)))),
-        };
-        if let Some(d) = first { act = act.details(d); }
-        if let Some(s) = second { act = act.state(s); }
-    } else {
-        if show_title { act = act.details(&t.title); }
-        if show_artist {
-            act = if show_title { act.state(&t.artist) } else { act.details(&t.artist) };
-        }
-        if show_quality && !show_title && !show_artist {
-            act = act.details(quality_text(t));
-        }
-    }
-
-    let mut assets_payload = activity::Assets::new()
-        .large_image("rifly_logo")
-        .large_text(if show_album { &t.album } else { "Rifly" });
-
-    if show_quality {
-        assets_payload = assets_payload
-            .small_image(small_image(t))
-            .small_text(small_hover(t));
-    }
-
-    act = act.assets(assets_payload);
-
-    if show_progress && !is_paused {
-        let now = now_unix();
-        let start = now - pos as i64;
-        let end = start + dur as i64;
-        act = act.timestamps(activity::Timestamps::new().start(start).end(end));
-    }
-
-    let b1_label = settings.get("discord_button1_label").map(|s| s.as_str()).unwrap_or("");
-    let b1_url = settings.get("discord_button1_url").map(|s| s.as_str()).unwrap_or("");
-    let b2_label = settings.get("discord_button2_label").map(|s| s.as_str()).unwrap_or("");
-    let b2_url = settings.get("discord_button2_url").map(|s| s.as_str()).unwrap_or("");
-
-    let mut buttons = Vec::new();
-    if !b1_label.is_empty() && !b1_url.is_empty() {
-        buttons.push(activity::Button::new(b1_label, b1_url));
-    }
-    if !b2_label.is_empty() && !b2_url.is_empty() {
-        buttons.push(activity::Button::new(b2_label, b2_url));
-    }
-    if !buttons.is_empty() {
-        act = act.buttons(buttons);
-    }
-
-    act
-}
+// build_activity removed to inline inside run_loop to fix lifetime issues
 
 fn run_loop(player: Arc<Mutex<Player>>, settings_path: std::path::PathBuf, shutdown: Arc<AtomicBool>) {
     let mut client: Option<DiscordIpcClient> = None;
@@ -249,22 +168,68 @@ fn run_loop(player: Arc<Mutex<Player>>, settings_path: std::path::PathBuf, shutd
                 let settings_changed = settings_raw != last_settings_raw;
 
                 if track_changed || state_changed || quality_changed || settings_changed {
-                    let act = build_activity(t, pos, dur, pb_state == PlaybackState::Paused, &map);
-                    match c.set_activity(act) {
-                        Ok(()) => {
-                            last_track_path = t.path.clone();
-                            last_state = pb_state;
-                            last_quality = qual;
-                            last_settings_raw = settings_raw;
+                    let show_title = map.get("discord_show_title").map(|v| v == "true").unwrap_or(true);
+                    let show_artist = map.get("discord_show_artist").map(|v| v == "true").unwrap_or(true);
+                    let show_album = map.get("discord_show_album").map(|v| v == "true").unwrap_or(true);
+                    let show_quality = map.get("discord_show_audio_quality").map(|v| v == "true").unwrap_or(true);
+                    let show_progress = map.get("discord_show_playback_progress").map(|v| v == "true").unwrap_or(true);
+                    let audiophile = map.get("discord_audiophile_mode").map(|v| v == "true").unwrap_or(false);
+
+                    let title_artist = format!("{} — {}", t.artist, t.title);
+                    let audiophile_state = format!("{} • Bit Perfect ✓", qual);
+                    let hover_text = small_hover(t);
+
+                    let mut act = activity::Activity::new()
+                        .activity_type(activity::ActivityType::Listening);
+
+                    if audiophile {
+                        if show_title && show_artist {
+                            act = act.details(&title_artist).state(&audiophile_state);
+                        } else if show_title {
+                            act = act.details(&t.title).state(&audiophile_state);
+                        } else if show_artist {
+                            act = act.details(&t.artist).state(&audiophile_state);
+                        } else {
+                            act = act.state(&audiophile_state);
                         }
-                        Err(_) => {
-                            let _ = c.close();
-                            client = None;
-                            delay = RECONNECT_BASE_MS;
-                            continue;
+                    } else {
+                        if show_title { act = act.details(&t.title); }
+                        if show_artist {
+                            if show_title { act = act.state(&t.artist); }
+                            else { act = act.details(&t.artist); }
+                        }
+                        if show_quality && !show_title && !show_artist {
+                            act = act.details(&qual);
                         }
                     }
-                }
+
+                    let mut assets_payload = activity::Assets::new().large_image("rifly_logo");
+                    if show_album { assets_payload = assets_payload.large_text(&t.album); }
+                    else { assets_payload = assets_payload.large_text("Rifly"); }
+
+                    if show_quality {
+                        assets_payload = assets_payload.small_image(small_image(t)).small_text(&hover_text);
+                    }
+                    act = act.assets(assets_payload);
+
+                    if show_progress && pb_state == PlaybackState::Playing {
+                        let now = now_unix();
+                        let start = now - pos as i64;
+                        let end = start + dur as i64;
+                        act = act.timestamps(activity::Timestamps::new().start(start).end(end));
+                    }
+
+                    let b1_label = map.get("discord_button1_label").map(|s| s.as_str()).unwrap_or("");
+                    let b1_url = map.get("discord_button1_url").map(|s| s.as_str()).unwrap_or("");
+                    let b2_label = map.get("discord_button2_label").map(|s| s.as_str()).unwrap_or("");
+                    let b2_url = map.get("discord_button2_url").map(|s| s.as_str()).unwrap_or("");
+
+                    let mut buttons = Vec::new();
+                    if !b1_label.is_empty() && !b1_url.is_empty() { buttons.push(activity::Button::new(b1_label, b1_url)); }
+                    if !b2_label.is_empty() && !b2_url.is_empty() { buttons.push(activity::Button::new(b2_label, b2_url)); }
+                    if !buttons.is_empty() { act = act.buttons(buttons); }
+
+                    match c.set_activity(act) {
             }
         } else if !should_connect {
             thread::sleep(Duration::from_millis(5000));

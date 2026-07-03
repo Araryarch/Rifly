@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { usePlayerStore } from '../stores/player'
+import { useFavoritesStore } from '../stores/favorites'
 import { formatTime, isHiRes } from '../types'
 import EqBars from '../components/EqBars.vue'
 
 const player = usePlayerStore()
+const favorites = useFavoritesStore()
 
 function seekTo(e: MouseEvent) {
   const el = e.currentTarget as HTMLElement
@@ -16,7 +18,7 @@ function seekTo(e: MouseEvent) {
   <div class="np-view">
     <template v-if="player.currentTrack">
       <div class="np-content animate-fade-in-up">
-        
+
         <div class="np-cover">
           <div v-if="player.coverArt" class="np-cover-img" :style="{ backgroundImage: `url(${player.coverArt})` }" />
           <div v-else class="np-cover-empty">
@@ -28,6 +30,16 @@ function seekTo(e: MouseEvent) {
           <h1 class="np-title">{{ player.currentTrack.title }}</h1>
           <p class="np-artist">{{ player.currentTrack.artist }}</p>
           <p class="np-album">{{ player.currentTrack.album }}</p>
+          <button
+            class="np-heart"
+            :class="{ liked: favorites.isFavorite(player.currentTrack.path) }"
+            @click="favorites.toggle(player.currentTrack!.path)"
+          >
+            <svg viewBox="0 0 24 24" :fill="favorites.isFavorite(player.currentTrack.path) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+            <span>{{ favorites.isFavorite(player.currentTrack.path) ? 'Liked' : 'Like' }}</span>
+          </button>
         </div>
 
         <div class="np-seek">
@@ -157,7 +169,27 @@ function seekTo(e: MouseEvent) {
 .np-album {
   font-size: 12px;
   color: color-mix(in srgb, var(--foreground) 40%, transparent);
+  margin-bottom: 8px;
 }
+
+.np-heart {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-base);
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.np-heart:hover { color: oklch(65% 0.2 20); border-color: oklch(65% 0.2 20); }
+.np-heart.liked { color: oklch(65% 0.2 20); border-color: oklch(65% 0.2 20); }
+.np-heart svg { width: 14px; height: 14px; }
 
 .np-seek {
   width: 100%;

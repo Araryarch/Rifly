@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, HashSet};
 use crate::domain::track::Track;
 use crate::infrastructure::metadata;
 use crate::engine::player::Player;
@@ -93,6 +93,154 @@ pub fn set_setting(key: String, value: String) {
     write_settings(&settings);
 }
 
+// --- Favorites ---
+
+fn favorites_path() -> std::path::PathBuf {
+    let mut p = std::env::current_exe().unwrap_or_default();
+    p.pop();
+    p.push("rifly_favorites.json");
+    p
+}
+
+fn read_favorites() -> HashSet<String> {
+    let path = favorites_path();
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+        .map(|v| v.into_iter().collect())
+        .unwrap_or_default()
+}
+
+fn write_favorites(favorites: &HashSet<String>) {
+    let vec: Vec<&String> = favorites.iter().collect();
+    if let Ok(data) = serde_json::to_string_pretty(&vec) {
+        let _ = std::fs::write(favorites_path(), data);
+    }
+}
+
+#[tauri::command]
+pub fn toggle_favorite(path: String) -> Result<bool, String> {
+    let mut favorites = read_favorites();
+    let is_fav = !favorites.contains(&path);
+    if is_fav {
+        favorites.insert(path);
+    } else {
+        favorites.remove(&path);
+    }
+    write_favorites(&favorites);
+    Ok(is_fav)
+}
+
+#[tauri::command]
+pub fn get_favorites() -> Result<Vec<String>, String> {
+    Ok(read_favorites().into_iter().collect())
+}
+
+// --- Play History ---
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct PlayRecord {
+    pub path: String,
+    pub timestamp: u64,
+    pub play_count: u64,
+}
+
+fn history_path() -> std::path::PathBuf {
+    let mut p = std::env::current_exe().unwrap_or_default();
+    p.pop();
+    p.push("rifly_history.json");
+    p
+}
+
+fn read_history() -> std::collections::HashMap<String, PlayRecord> {
+    let path = history_path();
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn write_history(history: &std::collections::HashMap<String, PlayRecord>) {
+    if let Ok(data) = serde_json::to_string_pretty(history) {
+        let _ = std::fs::write(history_path(), data);
+    }
+}
+
+#[tauri::command]
+pub fn log_play(path: String) -> Result<(), String> {
+    let mut history = read_history();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let record = history.entry(path.clone()).or_insert(PlayRecord {
+        path,
+        timestamp: 0,
+        play_count: 0,
+    });
+    record.timestamp = now;
+    record.play_count += 1;
+
+    write_history(&history);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_recently_played(limit: Option<usize>) -> Result<Vec<PlayRecord>, String> {
+    let history = read_history();
+    let mut records: Vec<PlayRecord> = history.into_values().collect();
+    records.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    let limit = limit.unwrap_or(50);
+    records.truncate(limit);
+    Ok(records)
+}
+
+#[tauri::command]
+pub fn get_most_played(limit: Option<usize>) -> Result<Vec<PlayRecord>, String> {
+    let history = read_history();
+    let mut records: Vec<PlayRecord> = history.into_values().collect();
+    records.sort_by(|a, b| b.play_count.cmp(&a.play_count));
+    let limit = limit.unwrap_or(50);
+    records.truncate(limit);
+    Ok(records)
+}
+
+// --- Session Restore ---
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct SessionData {
+    pub track_path: String,
+    pub position: f64,
+    pub queue: Vec<String>,
+    pub queue_index: usize,
+}
+
+fn session_path() -> std::path::PathBuf {
+    let mut p = std::env::current_exe().unwrap_or_default();
+    p.pop();
+    p.push("rifly_session.json");
+    p
+}
+
+#[tauri::command]
+pub fn save_session(track_path: String, position: f64, queue: Vec<String>, queue_index: usize) -> Result<(), String> {
+    let session = SessionData { track_path, position, queue, queue_index };
+    if let Ok(data) = serde_json::to_string_pretty(&session) {
+        let _ = std::fs::write(session_path(), data);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn load_session() -> Result<Option<SessionData>, String> {
+    let path = session_path();
+    match std::fs::read_to_string(&path) {
+        Ok(content) => Ok(serde_json::from_str(&content).ok()),
+        Err(_) => Ok(None),
+    }
+}
+
 // --- Devices ---
 
 #[derive(serde::Serialize)]
@@ -137,7 +285,6 @@ pub async fn start_oauth_server() -> Result<String, String> {
 
     let listener = TcpListener::bind("127.0.0.1:1424").await.map_err(|e| e.to_string())?;
     
-    // Accept a single connection
     if let Ok((mut stream, _)) = listener.accept().await {
         let mut buffer = [0; 4096];
         if stream.read(&mut buffer).await.is_ok() {

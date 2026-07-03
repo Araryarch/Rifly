@@ -11,6 +11,8 @@ use commands::AppState;
 use engine::player::Player;
 use services::discord::DiscordService;
 use tauri::{Manager, Emitter};
+use tauri::image::Image;
+use tauri::menu::{Menu, MenuItem};
 
 fn start_position_emitter(app: tauri::AppHandle) {
     std::thread::spawn(move || {
@@ -59,7 +61,52 @@ pub fn run() {
             });
 
             let handle = app.handle().clone();
-            start_position_emitter(handle);
+            start_position_emitter(handle.clone());
+
+            // --- System Tray ---
+            let icon_bytes = include_bytes!("../icons/32x32.png");
+            let tray_icon = Image::from_bytes(icon_bytes)
+                .expect("Failed to load tray icon");
+
+            let show_item = MenuItem::with_id(&handle, "show", "Show", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(&handle, "quit", "Quit", true, None::<&str>)?;
+            let tray_menu = Menu::with_items(&handle, &[&show_item, &quit_item])?;
+
+            let _tray = tauri::tray::TrayIconBuilder::new()
+                .icon(tray_icon)
+                .tooltip("Rifly")
+                .menu(&tray_menu)
+                .on_menu_event(move |app, event| {
+                    match event.id().as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_left_click(move |event| {
+                    if let Some(app) = event.app_handle() {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
+            // Minimize to tray on close
+            app.on_window_event(move |window, event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            });
 
             Ok(())
         })
@@ -74,6 +121,13 @@ pub fn run() {
             commands::get_audio_devices,
             commands::get_setting,
             commands::set_setting,
+            commands::toggle_favorite,
+            commands::get_favorites,
+            commands::log_play,
+            commands::get_recently_played,
+            commands::get_most_played,
+            commands::save_session,
+            commands::load_session,
             commands::start_oauth_server,
         ])
         .run(tauri::generate_context!())

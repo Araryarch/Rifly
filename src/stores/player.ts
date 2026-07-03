@@ -21,11 +21,11 @@ export const usePlayerStore = defineStore('player', () => {
   const isPlaying = computed(() => status.value === 'playing')
   let unlisten: (() => void) | null = null
   let posInterval: any = null
+  let sessionTimer: any = null
 
   const spotify = useSpotifyStore()
 
   async function init() {
-    // Local player state sync
     unlisten = await listen<{ status: string; position: number; duration: number }>('player:state', (e) => {
       if (source.value !== 'local') return
       status.value = e.payload.status as PlaybackStatus
@@ -33,10 +33,9 @@ export const usePlayerStore = defineStore('player', () => {
       duration.value = e.payload.duration
     })
 
-    // Spotify player state sync
     watch(() => spotify.playbackState, (st: any) => {
       if (!st || source.value !== 'spotify') return
-      
+
       const t = st.track_window.current_track
       if (t) {
         currentTrack.value = {
@@ -50,11 +49,11 @@ export const usePlayerStore = defineStore('player', () => {
         coverArt.value = t.album.images[0]?.url || null
         duration.value = st.duration / 1000
       }
-      
+
       status.value = st.paused ? 'paused' : 'playing'
       position.value = st.position / 1000
       shuffle.value = st.shuffle
-      
+
       if (!st.paused) {
         if (!posInterval) {
           posInterval = setInterval(() => { position.value += 1 }, 1000)
@@ -64,15 +63,57 @@ export const usePlayerStore = defineStore('player', () => {
         posInterval = null
       }
     }, { deep: true })
+
+    // Session autosave every 10s while playing
+    sessionTimer = setInterval(() => { saveSession() }, 10000)
   }
 
   function cleanup() {
     unlisten?.()
     clearInterval(posInterval)
+    clearInterval(sessionTimer)
   }
 
-  function toggleSource() {
-    // Internal auto-switch only now
+  function toggleSource() {}
+
+  async function logPlay(path: string) {
+    try { await invoke('log_play', { path }) } catch {}
+  }
+
+  async function saveSession() {
+    if (!currentTrack.value) return
+    try {
+      await invoke('save_session', {
+        trackPath: currentTrack.value.path,
+        position: position.value,
+        queue: queue.value.map(t => t.path),
+        queueIndex: queueIndex.value,
+      })
+    } catch {}
+  }
+
+  async function loadSession(): Promise<boolean> {
+    try {
+      const session: any = await invoke('load_session')
+      if (!session) return false
+      return true
+    } catch { return false }
+  }
+
+  function updateMediaSession() {
+    if ('mediaSession' in navigator && currentTrack.value) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.value.title,
+        artist: currentTrack.value.artist,
+        album: currentTrack.value.album,
+        artwork: coverArt.value ? [{ src: coverArt.value, sizes: '512x512', type: 'image/png' }] : [],
+      })
+      navigator.mediaSession.setActionHandler('play', () => resume())
+      navigator.mediaSession.setActionHandler('pause', () => pause())
+      navigator.mediaSession.setActionHandler('previoustrack', () => prev())
+      navigator.mediaSession.setActionHandler('nexttrack', () => next())
+      navigator.mediaSession.setActionHandler('stop', () => { stop(); saveSession() })
+    }
   }
 
   async function loadCoverArt(path: string) {
@@ -102,6 +143,9 @@ export const usePlayerStore = defineStore('player', () => {
       } else {
         queueIndex.value = queue.value.findIndex(t => t.path === track.path)
       }
+      logPlay(track.path)
+      updateMediaSession()
+      saveSession()
     } catch (e) { console.error('Playback error:', e) }
   }
 
@@ -120,17 +164,25 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function playIndex(idx: number) {
-    if (source.value === 'spotify') return // Spotify handles internal queue
+    if (source.value === 'spotify') return
     if (idx >= 0 && idx < queue.value.length) {
       await play(queue.value[idx])
       queueIndex.value = idx
     }
   }
 
+  async function playTrackList(tracks: Track[], startIdx = 0) {
+    source.value = 'local'
+    queue.value = [...tracks]
+    queueIndex.value = startIdx
+    play(tracks[startIdx])
+  }
+
   async function pause() {
     if (source.value === 'spotify') { await spotify.pause(); return }
     await invoke('pause_track')
     status.value = 'paused'
+    updateMediaSession()
   }
 
   async function resume() {
@@ -138,6 +190,7 @@ export const usePlayerStore = defineStore('player', () => {
     if (!currentTrack.value) return
     await invoke('resume_track')
     status.value = 'playing'
+    updateMediaSession()
   }
 
   async function next() {
@@ -163,10 +216,17 @@ export const usePlayerStore = defineStore('player', () => {
     await playIndex(prevIdx)
   }
 
-  async function toggleShuffle() { 
-    shuffle.value = !shuffle.value 
+  async function stop() {
+    if (source.value === 'spotify') return
+    await invoke('stop_track')
+    status.value = 'stopped'
+    position.value = 0
   }
-  
+
+  async function toggleShuffle() {
+    shuffle.value = !shuffle.value
+  }
+
   function cycleRepeat() {
     const m: RepeatMode[] = ['off', 'all', 'one']
     repeat.value = m[(m.indexOf(repeat.value) + 1) % m.length]
@@ -180,21 +240,33 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function clearQueue() { queue.value = []; queueIndex.value = -1; currentTrack.value = null }
-  
-  async function seek(pos: number) { 
+
+  async function seek(pos: number) {
     if (source.value === 'spotify') { await spotify.seek(pos * 1000); return }
-    position.value = pos 
+    position.value = pos
   }
-  
-  async function setVolume(v: number) { 
+
+  async function setVolume(v: number) {
     volume.value = Math.max(0, Math.min(1, v))
     if (source.value === 'spotify') { await spotify.setVolume(volume.value) }
+  }
+
+  /** Reorder queue: move item from `from` to `to` */
+  function moveInQueue(from: number, to: number) {
+    if (from < 0 || from >= queue.value.length || to < 0 || to >= queue.value.length) return
+    const item = queue.value.splice(from, 1)[0]
+    queue.value.splice(to, 0, item)
+    if (queueIndex.value === from) queueIndex.value = to
+    else if (from < queueIndex.value && to >= queueIndex.value) queueIndex.value--
+    else if (from > queueIndex.value && to <= queueIndex.value) queueIndex.value++
   }
 
   return {
     source, currentTrack, status, position, duration, volume, shuffle, repeat,
     queue, queueIndex, coverArt, isPlaying,
-    init, cleanup, toggleSource, play, playAll, playIndex, pause, resume, seek, next, prev,
+    init, cleanup, toggleSource, play, playAll, playIndex, playTrackList,
+    pause, resume, seek, next, prev, stop,
     toggleShuffle, cycleRepeat, removeFromQueue, clearQueue, setVolume, loadCoverArt,
+    logPlay, saveSession, loadSession, updateMediaSession, moveInQueue,
   }
 })

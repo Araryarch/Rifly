@@ -27,6 +27,19 @@ export interface DeviceInfo {
   is_default: boolean
 }
 
+export interface PlayRecord {
+  path: string
+  timestamp: number
+  play_count: number
+}
+
+export interface SessionData {
+  track_path: string
+  position: number
+  queue: string[]
+  queue_index: number
+}
+
 export type PlaybackStatus = 'stopped' | 'playing' | 'paused' | 'loading'
 export type RepeatMode = 'off' | 'one' | 'all'
 export type ViewName = 'library' | 'now-playing' | 'queue' | 'search' | 'settings'

@@ -1,13 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import type { Track, AlbumGroup } from '../types'
+import type { Track, AlbumGroup, PlayRecord } from '../types'
 
 export const useLibraryStore = defineStore('library', () => {
   const tracks = ref<Track[]>([])
   const musicFolder = ref('')
   const scanning = ref(false)
   const coverArtCache = ref<Map<string, string | null>>(new Map())
+  const recentlyPlayed = ref<PlayRecord[]>([])
+  const mostPlayed = ref<PlayRecord[]>([])
 
   const albums = computed<AlbumGroup[]>(() => {
     const map = new Map<string, Track[]>()
@@ -67,8 +69,35 @@ export const useLibraryStore = defineStore('library', () => {
       .sort((a, b) => a.album.localeCompare(b.album) || a.disc_number - b.disc_number || a.track_number - b.track_number)
   }
 
+  /** Returns recently played tracks (finds matching Track from loaded tracks) */
+  async function loadRecentlyPlayed() {
+    try {
+      recentlyPlayed.value = await invoke('get_recently_played', { limit: 50 })
+    } catch { recentlyPlayed.value = [] }
+  }
+
+  async function loadMostPlayed() {
+    try {
+      mostPlayed.value = await invoke('get_most_played', { limit: 50 })
+    } catch { mostPlayed.value = [] }
+  }
+
+  function trackByPath(path: string): Track | undefined {
+    return tracks.value.find(t => t.path === path)
+  }
+
+  /** Resolve PlayRecord paths to actual Track objects that exist in library */
+  function resolveRecords(records: PlayRecord[]): Track[] {
+    return records
+      .map(r => trackByPath(r.path))
+      .filter((t): t is Track => t !== undefined)
+  }
+
   return {
     tracks, musicFolder, scanning, coverArtCache, albums, artists,
-    scanFolder, loadCoverArt, loadCoverArtForAlbum, tracksForAlbum, tracksForArtist,
+    recentlyPlayed, mostPlayed,
+    scanFolder, loadCoverArt, loadCoverArtForAlbum,
+    tracksForAlbum, tracksForArtist,
+    loadRecentlyPlayed, loadMostPlayed, trackByPath, resolveRecords,
   }
 })

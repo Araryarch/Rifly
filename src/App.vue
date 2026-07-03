@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { useFavoritesStore } from './stores/favorites'
+import { useLibraryStore } from './stores/library'
 import Sidebar from './components/Sidebar.vue'
 import Topbar from './components/Topbar.vue'
 import RightPanel from './components/RightPanel.vue'
 import PlayerBar from './components/PlayerBar.vue'
+import MiniPlayer from './components/MiniPlayer.vue'
 import LibraryView from './views/LibraryView.vue'
 import NowPlayingView from './views/NowPlayingView.vue'
 import QueueView from './views/QueueView.vue'
@@ -12,16 +17,168 @@ import SettingsView from './views/SettingsView.vue'
 import { usePlayerStore } from './stores/player'
 import type { ViewName } from './types'
 
+const isMini = ref(window.location.search.includes('mini=1'))
+
 const player = usePlayerStore()
+const favorites = useFavoritesStore()
+const library = useLibraryStore()
 const currentView = ref<ViewName>('library')
 
-onMounted(() => {
-  player.init()
+// --- Keyboard Shortcuts ---
+function onKeyDown(e: KeyboardEvent) {
+  if (isMini.value) return
+  const target = e.target as HTMLElement
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+
+  switch (e.code) {
+    case 'Space':
+      e.preventDefault()
+      player.isPlaying ? player.pause() : player.resume()
+      break
+    case 'ArrowLeft':
+      if (e.ctrlKey) { e.preventDefault(); player.prev() }
+      break
+    case 'ArrowRight':
+      if (e.ctrlKey) { e.preventDefault(); player.next() }
+      break
+    case 'ArrowUp':
+      e.preventDefault()
+      player.setVolume(Math.min(1, player.volume + 0.05))
+      break
+    case 'ArrowDown':
+      e.preventDefault()
+      player.setVolume(Math.max(0, player.volume - 0.05))
+      break
+    case 'KeyS':
+      if (e.ctrlKey) { e.preventDefault(); player.toggleShuffle() }
+      break
+    case 'KeyR':
+      if (e.ctrlKey) { e.preventDefault(); player.cycleRepeat() }
+      break
+    case 'Escape':
+      if (currentView.value !== 'library') currentView.value = 'library'
+      break
+    case 'KeyM':
+      if (e.ctrlKey) { e.preventDefault(); currentView.value = 'now-playing' }
+      break
+    case 'KeyQ':
+      if (e.ctrlKey) { e.preventDefault(); currentView.value = 'queue' }
+      break
+  }
+}
+
+// --- Drag & Drop folder/files ---
+const dragging = ref(false)
+let dragCleanup: (() => void) | null = null
+
+async function setupDragDrop() {
+  try {
+    const win = getCurrentWindow()
+    dragCleanup = await win.onDragDropEvent((event) => {
+      dragging.value = event.payload.type === 'over' || event.payload.type === 'enter'
+      if (event.payload.type === 'drop') {
+        dragging.value = false
+        handleDroppedPaths(event.payload.paths)
+      }
+      if (event.payload.type === 'leave') dragging.value = false
+    })
+  } catch {
+    // Not in Tauri context
+  }
+}
+
+async function handleDroppedPaths(paths: string[]) {
+  for (const p of paths) {
+    // Check if it's a folder or audio file
+    const ext = p.split('.').pop()?.toLowerCase()
+    const audioExts = ['flac', 'wav', 'aiff', 'aif', 'dsd', 'mp3', 'aac', 'ogg', 'opus', 'm4a', 'ape', 'wv', 'tak']
+    if (ext && audioExts.includes(ext)) {
+      // Single file — add to queue and play
+      try {
+        const meta: any = await invoke('read_track_metadata', { path: p })
+        if (meta) player.playAll([meta])
+      } catch {}
+    } else {
+      // Folder — scan it
+      library.scanFolder(p)
+      await invoke('set_setting', { key: 'music_folder', value: p })
+      break
+    }
+  }
+}
+
+// --- Auto Theme ---
+function applyTheme(mode: string) {
+  if (mode === 'light') {
+    document.documentElement.style.setProperty('--background', '#f5f5f5')
+    document.documentElement.style.setProperty('--panel-bg', '#ffffff')
+    document.documentElement.style.setProperty('--panel-bg-hover', '#eeeeee')
+    document.documentElement.style.setProperty('--foreground', '#000000')
+    document.documentElement.style.setProperty('--text-muted', '#666666')
+    document.documentElement.style.setProperty('--border', '#dddddd')
+    document.documentElement.style.setProperty('--ring', '#000000')
+    document.documentElement.style.setProperty('--overlay', 'rgba(255,255,255,0.8)')
+  } else {
+    document.documentElement.style.setProperty('--background', '#000000')
+    document.documentElement.style.setProperty('--panel-bg', '#121212')
+    document.documentElement.style.setProperty('--panel-bg-hover', '#1f1f1f')
+    document.documentElement.style.setProperty('--foreground', '#ffffff')
+    document.documentElement.style.setProperty('--text-muted', '#b3b3b3')
+    document.documentElement.style.setProperty('--border', 'transparent')
+    document.documentElement.style.setProperty('--ring', '#ffffff')
+    document.documentElement.style.setProperty('--overlay', 'rgba(0,0,0,0.8)')
+  }
+}
+
+async function initTheme() {
+  const saved = await invoke<string | null>('get_setting', { key: 'theme' })
+  if (saved) {
+    applyTheme(saved)
+  } else {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    applyTheme(prefersDark ? 'dark' : 'light')
+  }
+}
+
+onMounted(async () => {
+  if (isMini.value) return
+
+  document.addEventListener('keydown', onKeyDown)
+  await player.init()
+  await favorites.load()
+  await initTheme()
+  await setupDragDrop()
+  await library.loadRecentlyPlayed()
+  await library.loadMostPlayed()
+
+  // Listen for theme changes via settings
+  watch(
+    () => currentView.value,
+    () => {
+      invoke<string | null>('get_setting', { key: 'theme' }).then(saved => {
+        if (saved) applyTheme(saved)
+      })
+    }
+  )
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeyDown)
+  dragCleanup?.()
 })
 </script>
 
 <template>
-  <div class="shell theme-spotify">
+  <div v-if="isMini" class="mini-shell">
+    <MiniPlayer />
+  </div>
+  <div v-else class="shell">
+    <!-- Drag overlay -->
+    <div v-if="dragging" class="drag-overlay">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      <span>drop to scan</span>
+    </div>
+
     <div class="shell-content">
       <div class="shell-topbar">
         <Topbar />
@@ -78,37 +235,37 @@ onMounted(() => {
   min-height: 0;
 }
 
-.shell-topbar {
-  grid-area: topbar;
-}
+.shell-topbar { grid-area: topbar; }
+.shell-sidebar { grid-area: sidebar; background: var(--panel-bg); border-radius: var(--radius-base); overflow: hidden; }
+.shell-main { grid-area: main; background: var(--panel-bg); border-radius: var(--radius-base); overflow: hidden; }
+.shell-right { grid-area: right; background: var(--panel-bg); border-radius: var(--radius-base); overflow: hidden; }
+.shell-player { height: var(--player-height); flex-shrink: 0; }
 
-.shell-sidebar { 
-  grid-area: sidebar; 
+.mini-shell {
+  height: 100vh;
   background: var(--panel-bg);
-  border-radius: var(--radius-base);
   overflow: hidden;
-}
-
-.shell-main { 
-  grid-area: main; 
-  background: var(--panel-bg);
-  border-radius: var(--radius-base);
-  overflow: hidden; 
-}
-
-.shell-right {
-  grid-area: right;
-  background: var(--panel-bg);
-  border-radius: var(--radius-base);
-  overflow: hidden;
-}
-
-.shell-player { 
-  height: var(--player-height);
-  flex-shrink: 0;
 }
 
 .fade-enter-active { transition: opacity 0.15s ease; }
 .fade-leave-active { transition: opacity 0.1s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* Drag overlay */
+.drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--overlay);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--main);
+  backdrop-filter: blur(4px);
+}
+.drag-overlay svg { width: 48px; height: 48px; }
 </style>

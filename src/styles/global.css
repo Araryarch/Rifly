@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-primary: #0d0d0d;
+  --color-bg-secondary: #000000;
+  --color-bg-tertiary: #141414;
+  --color-bg-elevated: #1a1a1a;
+  --color-bg-hover: #1f1f1f;
+  --color-bg-active: #272727;
+  --color-bg-card: #111111;
+
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #999999;
+  --color-text-tertiary: #555555;
+  --color-text-subdued: #333333;
+
+  --color-accent: #1db954;
+  --color-accent-hover: #1ed760;
+  --color-accent-dim: #1db95418;
+
+  --color-gold: #f0c030;
+  --color-gold-dim: #f0c03015;
+
+  --color-border: #2a2a2a;
+  --color-border-bold: #3a3a3a;
+  --color-danger: #ff3b30;
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-full: 9999px;
+}
+
+:root {
+  --sidebar-width: 260px;
+  --player-height: 84px;
+  --font: 'JetBrainsMono Nerd Font', 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+  --shadow-brutal: 3px 3px 0 rgba(255, 255, 255, 0.06);
+  --shadow-brutal-accent: 3px 3px 0 var(--color-accent);
+  --shadow-brutal-lg: 5px 5px 0 rgba(255, 255, 255, 0.05);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-bold);
+}
+
+/* ── Functional animations only ── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes eqBar {
+  0%, 100% { height: 3px; }
+  25% { height: 14px; }
+  50% { height: 6px; }
+  75% { height: 18px; }
+}
+
+@keyframes eqBar2 {
+  0%, 100% { height: 6px; }
+  30% { height: 18px; }
+  60% { height: 4px; }
+  80% { height: 12px; }
+}
+
+@keyframes eqBar3 {
+  0%, 100% { height: 8px; }
+  20% { height: 4px; }
+  45% { height: 16px; }
+  70% { height: 7px; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.25s ease-out;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}

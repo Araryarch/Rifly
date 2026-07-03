@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useFavoritesStore } from './stores/favorites'
@@ -107,60 +107,15 @@ async function handleDroppedPaths(paths: string[]) {
   }
 }
 
-// --- Auto Theme ---
-function applyTheme(mode: string) {
-  if (mode === 'light') {
-    document.documentElement.style.setProperty('--background', '#f5f5f5')
-    document.documentElement.style.setProperty('--panel-bg', '#ffffff')
-    document.documentElement.style.setProperty('--panel-bg-hover', '#eeeeee')
-    document.documentElement.style.setProperty('--secondary-background', '#f0f0f0')
-    document.documentElement.style.setProperty('--foreground', '#000000')
-    document.documentElement.style.setProperty('--text-muted', '#666666')
-    document.documentElement.style.setProperty('--border', '#dddddd')
-    document.documentElement.style.setProperty('--ring', '#000000')
-    document.documentElement.style.setProperty('--overlay', 'rgba(255,255,255,0.8)')
-  } else {
-    document.documentElement.style.setProperty('--background', '#000000')
-    document.documentElement.style.setProperty('--panel-bg', '#121212')
-    document.documentElement.style.setProperty('--panel-bg-hover', '#1f1f1f')
-    document.documentElement.style.setProperty('--foreground', '#ffffff')
-    document.documentElement.style.setProperty('--text-muted', '#b3b3b3')
-    document.documentElement.style.setProperty('--border', 'transparent')
-    document.documentElement.style.setProperty('--ring', '#ffffff')
-    document.documentElement.style.setProperty('--overlay', 'rgba(0,0,0,0.8)')
-  }
-}
-
-async function initTheme() {
-  const saved = await invoke<string | null>('get_setting', { key: 'theme' })
-  if (saved) {
-    applyTheme(saved)
-  } else {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    applyTheme(prefersDark ? 'dark' : 'light')
-  }
-}
-
 onMounted(async () => {
   if (isMini.value) return
 
   document.addEventListener('keydown', onKeyDown)
   await player.init()
   await favorites.load()
-  await initTheme()
   await setupDragDrop()
   await library.loadRecentlyPlayed()
   await library.loadMostPlayed()
-
-  // Listen for theme changes via settings
-  watch(
-    () => currentView.value,
-    () => {
-      invoke<string | null>('get_setting', { key: 'theme' }).then(saved => {
-        if (saved) applyTheme(saved)
-      })
-    }
-  )
 })
 
 onUnmounted(() => {

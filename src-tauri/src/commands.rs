@@ -1,10 +1,12 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use crate::domain::track::Track;
 use crate::infrastructure::metadata;
 use crate::engine::player::Player;
+use crate::services::discord::DiscordService;
 
 pub struct AppState {
-    pub player: Mutex<Player>,
+    pub player: Arc<Mutex<Player>>,
+    pub _discord: Mutex<DiscordService>,
 }
 
 // --- Playback ---

@@ -3,11 +3,13 @@ pub mod commands;
 mod domain;
 mod engine;
 mod infrastructure;
+mod services;
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use commands::AppState;
 use engine::player::Player;
+use services::discord::DiscordService;
 use tauri::{Manager, Emitter};
 
 fn start_position_emitter(app: tauri::AppHandle) {
@@ -33,14 +35,27 @@ fn start_position_emitter(app: tauri::AppHandle) {
     });
 }
 
+fn settings_path() -> std::path::PathBuf {
+    let mut p = std::env::current_exe().unwrap_or_default();
+    p.pop();
+    p.push("rifly_settings.json");
+    p
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            let player = Arc::new(Mutex::new(Player::new()));
+
+            let s_path = settings_path();
+            let _discord = DiscordService::new(player.clone(), s_path);
+
             app.manage(AppState {
-                player: Mutex::new(Player::new()),
+                player,
+                _discord: Mutex::new(_discord),
             });
 
             let handle = app.handle().clone();

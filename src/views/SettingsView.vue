@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useSpotifyStore } from '../stores/spotify'
@@ -12,10 +12,81 @@ const pathInput = ref('')
 const loading = ref(false)
 const error = ref('')
 
+// Discord Rich Presence settings
+const discordEnabled = ref(true)
+const discordHideAll = ref(false)
+const discordShowTitle = ref(true)
+const discordShowArtist = ref(true)
+const discordShowAlbum = ref(true)
+const discordShowCoverArt = ref(true)
+const discordShowQuality = ref(true)
+const discordShowProgress = ref(true)
+const discordAudiophile = ref(false)
+const discordClientId = ref('')
+const discordBtn1Label = ref('')
+const discordBtn1Url = ref('')
+const discordBtn2Label = ref('')
+const discordBtn2Url = ref('')
+
+const dcKeys = {
+  enabled: 'discord_enabled',
+  hideAll: 'discord_hide_everything',
+  showTitle: 'discord_show_title',
+  showArtist: 'discord_show_artist',
+  showAlbum: 'discord_show_album',
+  showCoverArt: 'discord_show_cover_art',
+  showQuality: 'discord_show_audio_quality',
+  showProgress: 'discord_show_playback_progress',
+  audiophile: 'discord_audiophile_mode',
+  clientId: 'discord_client_id',
+  btn1Label: 'discord_button1_label',
+  btn1Url: 'discord_button1_url',
+  btn2Label: 'discord_button2_label',
+  btn2Url: 'discord_button2_url',
+}
+
+async function loadDiscordSettings() {
+  const get = async (k: string) => { try { return await invoke<string | null>('get_setting', { key: k }) } catch { return null } }
+  discordEnabled.value = (await get(dcKeys.enabled)) !== 'false'
+  discordHideAll.value = (await get(dcKeys.hideAll)) === 'true'
+  discordShowTitle.value = (await get(dcKeys.showTitle)) !== 'false'
+  discordShowArtist.value = (await get(dcKeys.showArtist)) !== 'false'
+  discordShowAlbum.value = (await get(dcKeys.showAlbum)) !== 'false'
+  discordShowCoverArt.value = (await get(dcKeys.showCoverArt)) !== 'false'
+  discordShowQuality.value = (await get(dcKeys.showQuality)) !== 'false'
+  discordShowProgress.value = (await get(dcKeys.showProgress)) !== 'false'
+  discordAudiophile.value = (await get(dcKeys.audiophile)) === 'true'
+  discordClientId.value = (await get(dcKeys.clientId)) || ''
+  discordBtn1Label.value = (await get(dcKeys.btn1Label)) || ''
+  discordBtn1Url.value = (await get(dcKeys.btn1Url)) || ''
+  discordBtn2Label.value = (await get(dcKeys.btn2Label)) || ''
+  discordBtn2Url.value = (await get(dcKeys.btn2Url)) || ''
+}
+
+function saveDiscordSetting(key: string, value: string) {
+  invoke('set_setting', { key, value })
+}
+
+watch(discordEnabled, v => saveDiscordSetting(dcKeys.enabled, String(v)))
+watch(discordHideAll, v => saveDiscordSetting(dcKeys.hideAll, String(v)))
+watch(discordShowTitle, v => saveDiscordSetting(dcKeys.showTitle, String(v)))
+watch(discordShowArtist, v => saveDiscordSetting(dcKeys.showArtist, String(v)))
+watch(discordShowAlbum, v => saveDiscordSetting(dcKeys.showAlbum, String(v)))
+watch(discordShowCoverArt, v => saveDiscordSetting(dcKeys.showCoverArt, String(v)))
+watch(discordShowQuality, v => saveDiscordSetting(dcKeys.showQuality, String(v)))
+watch(discordShowProgress, v => saveDiscordSetting(dcKeys.showProgress, String(v)))
+watch(discordAudiophile, v => saveDiscordSetting(dcKeys.audiophile, String(v)))
+watch(discordClientId, v => saveDiscordSetting(dcKeys.clientId, v))
+watch(discordBtn1Label, v => saveDiscordSetting(dcKeys.btn1Label, v))
+watch(discordBtn1Url, v => saveDiscordSetting(dcKeys.btn1Url, v))
+watch(discordBtn2Label, v => saveDiscordSetting(dcKeys.btn2Label, v))
+watch(discordBtn2Url, v => saveDiscordSetting(dcKeys.btn2Url, v))
+
 onMounted(async () => {
   await spotify.init()
   clientIdInput.value = spotify.clientId
   pathInput.value = lib.musicFolder
+  await loadDiscordSettings()
 })
 
 async function pickFolder() {
@@ -134,6 +205,75 @@ async function connect() {
           <div class="status-desc">
             {{ spotify.ready ? 'Device "Rifly" is ready.' : 'Initializing virtual device...' }}
           </div>
+        </div>
+      </div>
+
+      <div class="card animate-fade-in" style="margin-top: 24px">
+        <h2 class="card-title">Discord Rich Presence</h2>
+        <p class="card-desc">
+          Show what you're listening to on your Discord profile.
+          Requires a <a href="https://discord.com/developers/applications" target="_blank" style="color: var(--main)">Discord Application</a>
+          with a Client ID and uploaded art assets (large image key: <code>rifly_logo</code>).
+        </p>
+
+        <div class="form-group">
+          <label>CLIENT ID</label>
+          <input v-model="discordClientId" type="text" class="input" placeholder="Paste your Discord App Client ID" />
+        </div>
+
+        <div class="toggle-group">
+          <label class="toggle-row">
+            <span>Enable Discord RPC</span>
+            <input type="checkbox" v-model="discordEnabled" class="toggle" />
+          </label>
+          <label class="toggle-row">
+            <span>Hide Everything (overrides all below)</span>
+            <input type="checkbox" v-model="discordHideAll" class="toggle" />
+          </label>
+        </div>
+
+        <div class="toggle-group" v-show="discordEnabled && !discordHideAll">
+          <div class="sub-label">DISPLAY OPTIONS</div>
+          <label class="toggle-row">
+            <span>Show Song Title</span>
+            <input type="checkbox" v-model="discordShowTitle" class="toggle" />
+          </label>
+          <label class="toggle-row">
+            <span>Show Artist</span>
+            <input type="checkbox" v-model="discordShowArtist" class="toggle" />
+          </label>
+          <label class="toggle-row">
+            <span>Show Album</span>
+            <input type="checkbox" v-model="discordShowAlbum" class="toggle" />
+          </label>
+          <label class="toggle-row">
+            <span>Show Cover Art</span>
+            <input type="checkbox" v-model="discordShowCoverArt" class="toggle" />
+          </label>
+          <label class="toggle-row">
+            <span>Show Audio Quality</span>
+            <input type="checkbox" v-model="discordShowQuality" class="toggle" />
+          </label>
+          <label class="toggle-row">
+            <span>Show Playback Progress</span>
+            <input type="checkbox" v-model="discordShowProgress" class="toggle" />
+          </label>
+          <label class="toggle-row">
+            <span>Audiophile Mode</span>
+            <input type="checkbox" v-model="discordAudiophile" class="toggle" />
+          </label>
+        </div>
+
+        <div class="form-group" v-show="discordEnabled && !discordHideAll" style="margin-top: 16px; padding-top: 16px; border-top: 2px dashed var(--border)">
+          <div class="sub-label">BUTTON 1</div>
+          <input v-model="discordBtn1Label" type="text" class="input" placeholder="Label (e.g. Open Album)" style="margin-bottom: 8px" />
+          <input v-model="discordBtn1Url" type="text" class="input" placeholder="URL (e.g. https://..." />
+        </div>
+
+        <div class="form-group" v-show="discordEnabled && !discordHideAll" style="margin-top: 16px">
+          <div class="sub-label">BUTTON 2</div>
+          <input v-model="discordBtn2Label" type="text" class="input" placeholder="Label" style="margin-bottom: 8px" />
+          <input v-model="discordBtn2Url" type="text" class="input" placeholder="URL" />
         </div>
       </div>
     </div>
@@ -293,5 +433,65 @@ async function connect() {
 .status-desc {
   font-size: 11px;
   color: color-mix(in srgb, var(--foreground) 50%, transparent);
+}
+
+.toggle-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sub-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
+  margin: 8px 0 4px;
+}
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--background);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-base);
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+  transition: all 0.1s;
+}
+.toggle-row:hover {
+  border-color: var(--main);
+}
+.toggle {
+  appearance: none;
+  width: 36px;
+  height: 20px;
+  background: var(--background);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: color-mix(in srgb, var(--foreground) 40%, transparent);
+  border-radius: 50%;
+  transition: all 0.15s;
+}
+.toggle:checked {
+  background: var(--main);
+  border-color: var(--main);
+}
+.toggle:checked::after {
+  left: 18px;
+  background: var(--main-foreground);
 }
 </style>

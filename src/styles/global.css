@@ -13,7 +13,7 @@
   --ring: #ffffff;
   --overlay: rgba(0,0,0,0.8);
   --shadow: 0 8px 24px rgba(0,0,0,0.5);
-  --font: 'Circular', 'Inter', 'Helvetica Neue', 'JetBrainsMono Nerd Font', sans-serif;
+  --font: 'JetBrainsMono Nerd Font', 'JetBrains Mono', 'Circular', 'Inter', 'Helvetica Neue', sans-serif;
   --sidebar-width: 240px; /* Expanded with menus */
   --right-panel-width: 320px;
   --player-height: 90px;

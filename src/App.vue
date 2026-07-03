@@ -7,6 +7,7 @@ import PlayerBar from './components/PlayerBar.vue'
 import LibraryView from './views/LibraryView.vue'
 import NowPlayingView from './views/NowPlayingView.vue'
 import QueueView from './views/QueueView.vue'
+import SearchView from './views/SearchView.vue'
 import SettingsView from './views/SettingsView.vue'
 import { usePlayerStore } from './stores/player'
 import type { ViewName } from './types'
@@ -35,6 +36,7 @@ onMounted(() => {
           <LibraryView v-if="currentView === 'library'" key="library" />
           <NowPlayingView v-else-if="currentView === 'now-playing'" key="now-playing" />
           <QueueView v-else-if="currentView === 'queue'" key="queue" />
+          <SearchView v-else-if="currentView === 'search'" key="search" />
           <SettingsView v-else-if="currentView === 'settings'" key="settings" />
         </Transition>
       </main>

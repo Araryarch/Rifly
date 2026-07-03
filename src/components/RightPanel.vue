@@ -7,7 +7,7 @@ const player = usePlayerStore()
 <template>
   <aside class="right-panel">
     <div class="r-header">
-      <div class="r-title">{{ player.currentTrack?.title || 'Code and Chill' }}</div>
+      <div class="r-title">Now Playing</div>
       <div class="r-actions">
         <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
         <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg></button>
@@ -23,8 +23,8 @@ const player = usePlayerStore()
       </div>
 
       <div class="r-info">
-        <div class="r-song-title">{{ player.currentTrack?.title || 'Stone Man Rises - Wildcard' }}</div>
-        <div class="r-song-artist">{{ player.currentTrack?.artist || 'Codfish' }}</div>
+        <div class="r-song-title">Lorem Ipsum Dolor</div>
+        <div class="r-song-artist">Sit Amet Consectetur</div>
       </div>
 
       <div class="r-about">
@@ -141,6 +141,5 @@ const player = usePlayerStore()
 .about-img {
   flex: 1;
   background-color: #333;
-  /* Add a gradient overlay or image here later */
 }
 </style>

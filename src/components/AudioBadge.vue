@@ -16,7 +16,7 @@ const label = props.compact
 </script>
 
 <template>
-  <span :class="['badge', hiRes ? 'badge--hires' : 'badge--std']">{{ label }}</span>
+  <span :class="['badge', hiRes ? 'badge-hr' : 'badge-std']">{{ label }}</span>
 </template>
 
 <style scoped>
@@ -24,21 +24,24 @@ const label = props.compact
   display: inline-flex;
   align-items: center;
   font-family: var(--font);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
-  padding: 1px 5px;
+  padding: 2px 6px;
   letter-spacing: 0.05em;
   white-space: nowrap;
   text-transform: uppercase;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-base);
 }
 
-.badge--hires {
-  color: var(--color-gold);
-  border: 1.5px solid var(--color-gold);
+.badge-hr {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: var(--secondary-background);
 }
 
-.badge--std {
-  color: var(--color-text-tertiary);
-  border: 1px solid var(--color-border);
+.badge-std {
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+  background: transparent;
 }
 </style>

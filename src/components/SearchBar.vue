@@ -28,7 +28,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 </script>
 
 <template>
-  <div :class="['search', { focused }]">
+  <div :class="['search-box', { focused }]">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="search-icon">
       <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
     </svg>
@@ -42,7 +42,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
       @focus="focused = true"
       @blur="focused = false"
     />
-    <kbd v-if="!focused && !query" class="search-key">ctrl+k</kbd>
+    <kbd v-if="!focused && !query" class="search-kbd">CTRL+K</kbd>
     <button v-if="query" class="search-clear" @click="query = ''; emit('search', '')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
     </button>
@@ -50,30 +50,28 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 </template>
 
 <style scoped>
-.search {
+.search-box {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--color-bg-tertiary);
-  border: 2px solid var(--color-border);
-  padding: 5px 10px;
-  max-width: 260px;
+  background: var(--secondary-background);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-base);
+  padding: 6px 12px;
+  max-width: 280px;
   width: 100%;
-  transition: border-color 0.1s;
+  transition: all 0.15s;
 }
 
-.search:hover {
-  border-color: var(--color-border-bold);
-}
-
-.search.focused {
-  border-color: var(--color-text-primary);
+.search-box.focused {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 .search-icon {
-  width: 13px;
-  height: 13px;
-  color: var(--color-text-tertiary);
+  width: 14px;
+  height: 14px;
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
   flex-shrink: 0;
 }
 
@@ -82,25 +80,27 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
   background: transparent;
   border: none;
   outline: none;
-  color: var(--color-text-primary);
+  color: var(--foreground);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: 13px;
   min-width: 0;
 }
 
 .search-input::placeholder {
-  color: var(--color-text-tertiary);
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
 }
 
-.search-key {
+.search-kbd {
   font-family: var(--font);
-  font-size: 9px;
-  color: var(--color-text-subdued);
-  border: 1px solid var(--color-border);
-  padding: 0px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--main-foreground);
+  background: var(--main);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
   flex-shrink: 0;
   pointer-events: none;
-  text-transform: lowercase;
 }
 
 .search-clear {
@@ -109,14 +109,15 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
   justify-content: center;
   background: transparent;
   border: none;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   cursor: pointer;
-  color: var(--color-text-tertiary);
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
   flex-shrink: 0;
+  transition: color 0.1s;
 }
 
 .search-clear:hover {
-  color: var(--color-text-primary);
+  color: var(--foreground);
 }
 </style>

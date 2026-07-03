@@ -1,16 +1,15 @@
 <script setup lang="ts">
 defineProps<{
   playing?: boolean
-  color?: string
   size?: 'sm' | 'md'
 }>()
 </script>
 
 <template>
   <div :class="['eq-bars', size === 'sm' ? 'eq-sm' : 'eq-md']">
-    <span :class="['eq-bar eq-bar-1', { paused: !playing }]" :style="color ? { background: color } : {}" />
-    <span :class="['eq-bar eq-bar-2', { paused: !playing }]" :style="color ? { background: color } : {}" />
-    <span :class="['eq-bar eq-bar-3', { paused: !playing }]" :style="color ? { background: color } : {}" />
+    <span :class="['eq-bar eq-bar-1', { paused: !playing }]" />
+    <span :class="['eq-bar eq-bar-2', { paused: !playing }]" />
+    <span :class="['eq-bar eq-bar-3', { paused: !playing }]" />
   </div>
 </template>
 
@@ -30,9 +29,11 @@ defineProps<{
 }
 
 .eq-bar {
-  width: 3px;
-  background: var(--color-accent);
+  width: 4px;
+  background: var(--main);
   will-change: height;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 .eq-bar-1 { animation: eqBar 0.8s ease-in-out infinite; }
@@ -41,6 +42,6 @@ defineProps<{
 
 .eq-bar.paused {
   animation-play-state: paused;
-  height: 3px !important;
+  height: 4px !important;
 }
 </style>

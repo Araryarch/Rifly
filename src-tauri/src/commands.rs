@@ -125,3 +125,47 @@ pub fn get_audio_devices() -> Result<Vec<DeviceInfo>, String> {
 
     Ok(devices)
 }
+
+// --- Spotify Integration ---
+
+#[tauri::command]
+pub async fn start_oauth_server() -> Result<String, String> {
+    use tokio::net::TcpListener;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = TcpListener::bind("127.0.0.1:1424").await.map_err(|e| e.to_string())?;
+    
+    // Accept a single connection
+    if let Ok((mut stream, _)) = listener.accept().await {
+        let mut buffer = [0; 4096];
+        if stream.read(&mut buffer).await.is_ok() {
+            let request = String::from_utf8_lossy(&buffer);
+            
+            if let Some(first_line) = request.lines().next() {
+                if first_line.starts_with("GET /callback") {
+                    let response_html = "HTTP/1.1 200 OK\r\n\
+                                         Content-Type: text/html\r\n\
+                                         \r\n\
+                                         <html><body style='font-family: monospace; background: #222; color: #fff; padding: 2rem;'>\
+                                         <h2>// rifly</h2>\
+                                         <p>spotify connected. you can close this window.</p>\
+                                         <script>setTimeout(() => window.close(), 1000)</script>\
+                                         </body></html>";
+                    let _ = stream.write_all(response_html.as_bytes()).await;
+                    
+                    if let Some(query_start) = first_line.find('?') {
+                        if let Some(query_end) = first_line.find(" HTTP") {
+                            let query = &first_line[query_start + 1..query_end];
+                            for param in query.split('&') {
+                                if param.starts_with("code=") {
+                                    return Ok(param[5..].to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Err("Failed to capture code".into())
+}

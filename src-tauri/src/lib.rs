@@ -107,9 +107,8 @@ pub fn run() {
             commands::save_session,
             commands::load_session,
             commands::start_oauth_server,
-            commands::add_music_files,
-            commands::get_imported_files,
-            commands::remove_imported_file,
+            commands::create_music_entry,
+            commands::scan_music_entries,
             commands::edit_track_metadata,
         ])
         .run(tauri::generate_context!())

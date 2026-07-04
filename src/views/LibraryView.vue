@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { open } from '@tauri-apps/plugin-dialog'
 import { useLibraryStore } from '../stores/library'
 import { usePlayerStore } from '../stores/player'
 import { useFavoritesStore } from '../stores/favorites'
@@ -10,6 +9,7 @@ import { useUiStore } from '../stores/ui'
 import AlbumCard from '../components/AlbumCard.vue'
 import TrackList from '../components/TrackList.vue'
 import MetadataEditor from '../components/MetadataEditor.vue'
+import AddMusicForm from '../components/AddMusicForm.vue'
 import type { LibraryFilter, AlbumGroup, Track } from '../types'
 
 const lib = useLibraryStore()
@@ -138,6 +138,7 @@ const filteredTracks = computed(() => {
 // Metadata editor
 const editingTrack = ref<Track | null>(null)
 const showEditor = ref(false)
+const showAddForm = ref(false)
 
 function editTrackMetadata(track: Track) {
   editingTrack.value = track
@@ -148,24 +149,12 @@ function onMetadataSaved(updated: Track) {
   lib.replaceTrack(updated)
 }
 
-async function addMusic() {
-  const files = await open({
-    multiple: true,
-    filters: [{
-      name: 'Audio',
-      extensions: ['flac', 'wav', 'aiff', 'aif', 'aifc', 'alac', 'm4a', 'mp3', 'aac', 'ogg', 'opus', 'wma', 'dsf', 'dff', 'ape', 'wv', 'tak'],
-    }],
-  })
-  if (!files) return
-  const paths = Array.isArray(files) ? files : [files]
-  try {
-    const tracks: Track[] = await invoke('add_music_files', { paths })
-    for (const t of tracks) {
-      lib.addTrack(t)
-    }
-  } catch (e) {
-    console.error('add music error:', e)
-  }
+function addMusic() {
+  showAddForm.value = true
+}
+
+function onMusicCreated(track: Track) {
+  lib.addTrack(track)
 }
 
 const totalDuration = computed(() => {
@@ -378,6 +367,7 @@ const favoriteAlbums = computed<AlbumGroup[]>(() => {
   </div>
 
   <MetadataEditor :track="editingTrack" :show="showEditor" @close="showEditor = false" @saved="onMetadataSaved" />
+  <AddMusicForm v-if="showAddForm" @close="showAddForm = false" @created="onMusicCreated" />
 </template>
 
 <style scoped>

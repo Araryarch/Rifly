@@ -30,10 +30,6 @@ fn session_path(state: &AppState) -> PathBuf {
     state.data_dir.join("rifly_session.json")
 }
 
-fn imported_path(state: &AppState) -> PathBuf {
-    state.data_dir.join("rifly_imported.json")
-}
-
 fn read_json<T: serde::de::DeserializeOwned + Default>(path: &PathBuf) -> T {
     std::fs::read_to_string(path)
         .ok()
@@ -214,39 +210,146 @@ pub fn load_session(state: tauri::State<AppState>) -> Result<Option<SessionData>
     Ok(read_json(&session_path(&state)))
 }
 
-// --- Import Music ---
+// --- Create Music Entry (form-based) ---
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct MusicEntry {
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub album_artist: String,
+    pub genre: String,
+    pub year: i32,
+    pub track_number: i32,
+    pub audio_path: Option<String>,
+    pub folder: String,
+    pub metadata_path: String,
+}
+
+fn music_dir(state: &AppState) -> PathBuf {
+    state.data_dir.join("music")
+}
+
+fn entries_path(state: &AppState) -> PathBuf {
+    state.data_dir.join("rifly_music.json")
+}
 
 #[tauri::command]
-pub fn add_music_files(state: tauri::State<AppState>, paths: Vec<String>) -> Result<Vec<Track>, String> {
-    let mut imported: Vec<String> = read_json(&imported_path(&state));
-    let mut tracks = Vec::new();
-    for p in &paths {
-        let path = std::path::Path::new(p);
-        if !path.exists() { continue; }
-        if imported.contains(p) { continue; }
-        match metadata::read_metadata(path) {
-            Ok(track) => {
-                imported.push(p.clone());
-                tracks.push(track);
+pub fn create_music_entry(
+    state: tauri::State<AppState>,
+    title: String,
+    artist: String,
+    album: String,
+    album_artist: Option<String>,
+    genre: Option<String>,
+    year: Option<i32>,
+    track_number: Option<i32>,
+    audio_path: Option<String>,
+) -> Result<Track, String> {
+    let safe_name = sanitize_filename(&title);
+    let music = music_dir(&state);
+    std::fs::create_dir_all(&music).map_err(|e| format!("Create music dir: {e}"))?;
+
+    let folder = music.join(&safe_name);
+    std::fs::create_dir_all(&folder).map_err(|e| format!("Create folder: {e}"))?;
+
+    let mut track = Track {
+        title: title.clone(),
+        artist: artist.clone(),
+        album: album.clone(),
+        album_artist: album_artist.unwrap_or_default(),
+        genres: if let Some(g) = genre.clone() { vec![g] } else { Vec::new() },
+        track_number: track_number.unwrap_or(1),
+        year: year.unwrap_or(0),
+        ..Default::default()
+    };
+
+    // Copy audio file if provided
+    if let Some(src) = &audio_path {
+        let src_path = std::path::Path::new(src);
+        if src_path.exists() {
+            let ext = src_path.extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("flac");
+            let dest = folder.join(format!("{}.{}", safe_name, ext));
+            std::fs::copy(src_path, &dest).map_err(|e| format!("Copy audio: {e}"))?;
+
+            // Read actual metadata from the copied file
+            if let Ok(real) = metadata::read_metadata(&dest) {
+                track = real;
+            } else {
+                track.path = dest.to_string_lossy().to_string();
+                track.format = ext.to_string();
             }
-            Err(e) => eprintln!("Import error for {}: {}", p, e),
+        }
+    } else {
+        // Create a metadata-only file so it shows up in scans
+        track.format = "metadata".to_string();
+    }
+
+    // Write metadata JSON
+    let meta_path = folder.join(format!("metadata_{}.json", safe_name));
+    write_json(&meta_path, &track);
+
+    // Register in manifest
+    let mut entries: Vec<MusicEntry> = read_json(&entries_path(&state));
+    entries.push(MusicEntry {
+        title: track.title.clone(),
+        artist: track.artist.clone(),
+        album: track.album.clone(),
+        album_artist: track.album_artist.clone(),
+        genre: track.genres.first().cloned().unwrap_or_default(),
+        year: track.year,
+        track_number: track.track_number,
+        audio_path: if track.path.is_empty() { None } else { Some(track.path.clone()) },
+        folder: folder.to_string_lossy().to_string(),
+        metadata_path: meta_path.to_string_lossy().to_string(),
+    });
+    write_json(&entries_path(&state), &entries);
+
+    Ok(track)
+}
+
+#[tauri::command]
+pub fn scan_music_entries(state: tauri::State<AppState>) -> Result<Vec<Track>, String> {
+    let music = music_dir(&state);
+    if !music.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut tracks = Vec::new();
+    let readdir = std::fs::read_dir(&music).map_err(|e| format!("Read music dir: {e}"))?;
+
+    for entry in readdir.flatten() {
+        let path = entry.path();
+        if !path.is_dir() { continue; }
+
+        // Look for metadata JSON
+        if let Ok(meta_entries) = std::fs::read_dir(&path) {
+            for meta in meta_entries.flatten() {
+                let meta_path = meta.path();
+                if meta_path.extension().and_then(|e| e.to_str()) == Some("json")
+                    && meta_path.file_stem().and_then(|s| s.to_str()).map_or(false, |s| s.starts_with("metadata_"))
+                {
+                    let track: Track = read_json(&meta_path);
+                    if !track.title.is_empty() {
+                        tracks.push(track);
+                    }
+                }
+            }
         }
     }
-    write_json(&imported_path(&state), &imported);
+
     Ok(tracks)
 }
 
-#[tauri::command]
-pub fn get_imported_files(state: tauri::State<AppState>) -> Result<Vec<String>, String> {
-    Ok(read_json(&imported_path(&state)))
-}
-
-#[tauri::command]
-pub fn remove_imported_file(state: tauri::State<AppState>, path: String) -> Result<(), String> {
-    let mut imported: Vec<String> = read_json(&imported_path(&state));
-    imported.retain(|p| p != &path);
-    write_json(&imported_path(&state), &imported);
-    Ok(())
+fn sanitize_filename(s: &str) -> String {
+    let invalid = ['<', '>', ':', '"', '/', '\\', '|', '?', '*', '\0'];
+    s.chars()
+        .map(|c| if invalid.contains(&c) || c.is_whitespace() { '_' } else { c })
+        .collect::<String>()
+        .trim()
+        .to_string()
 }
 
 // --- Edit Metadata ---

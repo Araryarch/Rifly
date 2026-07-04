@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { usePlayerStore } from '../stores/player'
 import { useFavoritesStore } from '../stores/favorites'
 import { formatTime } from '../types'
@@ -11,10 +12,31 @@ onMounted(async () => {
   await player.init()
   await favorites.load()
 })
+
+async function closeMini() {
+  try {
+    const win = getCurrentWindow()
+    await win.close()
+  } catch {}
+}
+
+function startDrag() {
+  try {
+    getCurrentWindow().startDragging()
+  } catch {}
+}
 </script>
 
 <template>
   <div class="mini">
+    <!-- Draggable titlebar area with close button -->
+    <div class="mini-titlebar" @mousedown="startDrag">
+      <span class="mini-titlebar-label">rifly mini</span>
+      <button class="mini-close" @mousedown.stop @click="closeMini" title="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
     <div class="mini-cover" :style="{ backgroundImage: player.coverArt ? `url(${player.coverArt})` : undefined }">
       <div v-if="!player.coverArt" class="mini-cover-empty">
         <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="7" cy="17" r="3"/><circle cx="17" cy="15" r="3"/><polyline points="10 17 10 5 20 3 20 15"/></svg>
@@ -24,6 +46,9 @@ onMounted(async () => {
     <div class="mini-info" v-if="player.currentTrack">
       <div class="mini-title">{{ player.currentTrack.title }}</div>
       <div class="mini-artist">{{ player.currentTrack.artist }}</div>
+    </div>
+    <div class="mini-info" v-else>
+      <div class="mini-title" style="color: var(--text-muted)">No track playing</div>
     </div>
 
     <div class="mini-controls">
@@ -45,17 +70,18 @@ onMounted(async () => {
       </div>
     </div>
 
-    <button
-      class="mini-heart"
-      :class="{ liked: favorites.isFavorite(player.currentTrack?.path || '') }"
-      @click="player.currentTrack && favorites.toggle(player.currentTrack.path)"
-    >
-      <svg viewBox="0 0 24 24" :fill="favorites.isFavorite(player.currentTrack?.path || '') ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
-        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-      </svg>
-    </button>
-
-    <div class="mini-time">{{ formatTime(player.position) }} / {{ formatTime(player.duration) }}</div>
+    <div class="mini-bottom">
+      <button
+        class="mini-heart"
+        :class="{ liked: favorites.isFavorite(player.currentTrack?.path || '') }"
+        @click="player.currentTrack && favorites.toggle(player.currentTrack.path)"
+      >
+        <svg viewBox="0 0 24 24" :fill="favorites.isFavorite(player.currentTrack?.path || '') ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+      </button>
+      <div class="mini-time">{{ formatTime(player.position) }} / {{ formatTime(player.duration) }}</div>
+    </div>
   </div>
 </template>
 
@@ -66,11 +92,53 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 0 24px 24px;
   gap: 16px;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font);
+}
+
+/* Draggable titlebar */
+.mini-titlebar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 6px;
+  cursor: grab;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+.mini-titlebar:active {
+  cursor: grabbing;
+}
+.mini-titlebar-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+}
+.mini-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  -webkit-app-region: no-drag;
+}
+.mini-close svg { width: 14px; height: 14px; }
+.mini-close:hover {
+  background: color-mix(in srgb, var(--foreground) 12%, transparent);
+  color: var(--foreground);
 }
 
 .mini-cover {
@@ -81,6 +149,7 @@ onMounted(async () => {
   background-position: center;
   background-color: var(--panel-bg-hover);
   overflow: hidden;
+  flex-shrink: 0;
 }
 .mini-cover-empty {
   width: 100%;
@@ -91,8 +160,15 @@ onMounted(async () => {
 }
 .mini-cover-empty svg { width: 64px; height: 64px; color: var(--text-muted); }
 
-.mini-info { text-align: center; }
-.mini-title { font-size: 18px; font-weight: 700; }
+.mini-info { text-align: center; max-width: 100%; }
+.mini-title {
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
 .mini-artist { font-size: 13px; color: var(--text-muted); }
 
 .mini-controls {
@@ -110,19 +186,26 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: color 0.1s;
 }
 .mini-controls button svg { width: 24px; height: 24px; }
 .mini-controls button:hover { color: var(--foreground); }
 .mini-play {
-  width: 56px;
-  height: 56px;
-  background: var(--main);
+  width: 56px !important;
+  height: 56px !important;
+  background: var(--main) !important;
   color: var(--main-foreground) !important;
   border-radius: 50%;
+  transition: transform 0.15s, box-shadow 0.15s !important;
+  box-shadow: 0 4px 12px rgba(30, 215, 96, 0.3);
+}
+.mini-play:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(30, 215, 96, 0.4);
 }
 .mini-play svg { width: 24px; height: 24px; }
 
-.mini-progress { width: 100%; max-width: 300px; }
+.mini-progress { width: 100%; max-width: 260px; }
 .mini-bar {
   height: 4px;
   background: var(--panel-bg-hover);
@@ -133,6 +216,14 @@ onMounted(async () => {
   height: 100%;
   background: var(--main);
   transition: width 0.2s linear;
+}
+
+.mini-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
 }
 
 .mini-heart {

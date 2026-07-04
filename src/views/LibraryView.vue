@@ -135,6 +135,32 @@ const filteredTracks = computed(() => {
   )
 })
 
+// Pagination
+const ALBUMS_PER_PAGE = 24
+const TRACKS_PER_PAGE = 50
+const ARTISTS_PER_PAGE = 50
+
+const albumPage = ref(1)
+const trackPage = ref(1)
+const artistPage = ref(1)
+
+const paginatedAlbums = computed(() => filteredAlbums.value.slice(0, albumPage.value * ALBUMS_PER_PAGE))
+const paginatedTracks = computed(() => filteredTracks.value.slice(0, trackPage.value * TRACKS_PER_PAGE))
+const paginatedArtists = computed(() => lib.artists.slice(0, artistPage.value * ARTISTS_PER_PAGE))
+
+const hasMoreAlbums = computed(() => paginatedAlbums.value.length < filteredAlbums.value.length)
+const hasMoreTracks = computed(() => paginatedTracks.value.length < filteredTracks.value.length)
+const hasMoreArtists = computed(() => paginatedArtists.value.length < lib.artists.length)
+
+function resetPagination() {
+  albumPage.value = 1
+  trackPage.value = 1
+  artistPage.value = 1
+}
+
+watch(filter, () => resetPagination())
+watch(() => ui.searchQuery, () => resetPagination())
+
 // Metadata editor
 const editingTrack = ref<Track | null>(null)
 const showEditor = ref(false)

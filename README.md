@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="src/assets/vue.svg" alt="Rifly Logo" width="120" />
+  <img src="public/logo/logos.png" alt="Rifly Logo" width="120" />
 
   # Rifly
   

@@ -323,20 +323,31 @@ const favoriteAlbums = computed<AlbumGroup[]>(() => {
 
         <div v-if="filter === 'albums'" class="main-scroll">
           <div class="grid-albums">
-            <div v-for="a in filteredAlbums" :key="a.artist + a.album" @click="viewAlbum(a.artist, a.album)">
+            <div v-for="a in paginatedAlbums" :key="a.artist + a.album" @click="viewAlbum(a.artist, a.album)">
               <AlbumCard :artist="a.artist" :album="a.album" :tracks="a.tracks" :year="a.year" :coverArt="a.coverArt" @playAll="playAlbum" />
             </div>
           </div>
+          <div v-if="hasMoreAlbums" class="load-more-row">
+            <button class="btn-load-more" @click="albumPage++">load more ({{ filteredAlbums.length - paginatedAlbums.length }} left)</button>
+          </div>
           <div v-if="filteredAlbums.length === 0 && ui.searchQuery" class="empty">no results</div>
+          <div v-else-if="paginatedAlbums.length > 0" class="page-info">showing {{ paginatedAlbums.length }} of {{ filteredAlbums.length }} albums</div>
         </div>
 
         <div v-else-if="filter === 'artists'" class="main-scroll">
-          <div v-for="artist in lib.artists" :key="artist" class="artist-row">{{ artist }}</div>
+          <div v-for="artist in paginatedArtists" :key="artist" class="artist-row">{{ artist }}</div>
+          <div v-if="hasMoreArtists" class="load-more-row">
+            <button class="btn-load-more" @click="artistPage++">load more ({{ lib.artists.length - paginatedArtists.length }} left)</button>
+          </div>
         </div>
 
         <div v-else-if="filter === 'tracks'" class="main-scroll">
           <div v-if="ui.searchQuery" class="search-header">LOCAL RESULTS</div>
-          <TrackList :tracks="filteredTracks" :showArtist="true" :showAlbum="true" compact @play="playTrack" />
+          <TrackList :tracks="paginatedTracks" :showArtist="true" :showAlbum="true" compact @play="playTrack" />
+          <div v-if="hasMoreTracks" class="load-more-row">
+            <button class="btn-load-more" @click="trackPage++">load more ({{ filteredTracks.length - paginatedTracks.length }} left)</button>
+          </div>
+          <div v-if="filteredTracks.length > 0" class="page-info">showing {{ paginatedTracks.length }} of {{ filteredTracks.length }} tracks</div>
           <div v-if="ui.searchQuery" class="search-header" style="margin-top:24px">SPOTIFY RESULTS</div>
           <div v-if="spotifySearching" class="empty" style="padding:10px">searching spotify...</div>
           <TrackList v-if="ui.searchQuery && spotifyResults.length > 0" :tracks="spotifyResults" :showArtist="true" :showAlbum="true" compact @play="playTrack" />
@@ -575,6 +586,20 @@ const favoriteAlbums = computed<AlbumGroup[]>(() => {
 
 .v-divider { width: 2px; background: var(--border); margin: 0 4px; }
 .search-header { font-size: 14px; font-weight: 800; color: var(--main); margin-bottom: 12px; }
+
+.load-more-row { display: flex; justify-content: center; padding: 20px 0; }
+.btn-load-more {
+  padding: 8px 24px;
+  font-family: var(--font); font-size: 11px; font-weight: 700; text-transform: uppercase;
+  background: var(--secondary-background);
+  color: var(--foreground);
+  border: 2px solid var(--border);
+  border-radius: calc(var(--radius-base) - 2px);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-load-more:hover { background: var(--panel-bg-hover); }
+.page-info { text-align: center; font-size: 11px; color: var(--text-muted); padding: 4px 0 16px; }
 
 .playlist-card {
   background: var(--secondary-background);

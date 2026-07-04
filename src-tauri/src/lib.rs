@@ -36,13 +36,6 @@ fn start_position_emitter(app: tauri::AppHandle) {
     });
 }
 
-fn settings_path() -> std::path::PathBuf {
-    let mut p = std::env::current_exe().unwrap_or_default();
-    p.pop();
-    p.push("rifly_settings.json");
-    p
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -51,12 +44,15 @@ pub fn run() {
         .setup(|app| {
             let player = Arc::new(Mutex::new(Player::new()));
 
-            let s_path = settings_path();
-            let _discord = DiscordService::new(player.clone(), s_path);
+            let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+            std::fs::create_dir_all(&data_dir).ok();
+
+            let _discord = DiscordService::new(player.clone(), data_dir.clone());
 
             app.manage(AppState {
                 player,
                 _discord: Mutex::new(_discord),
+                data_dir,
             });
 
             let handle = app.handle().clone();
@@ -111,6 +107,10 @@ pub fn run() {
             commands::save_session,
             commands::load_session,
             commands::start_oauth_server,
+            commands::add_music_files,
+            commands::get_imported_files,
+            commands::remove_imported_file,
+            commands::edit_track_metadata,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

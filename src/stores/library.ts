@@ -93,11 +93,25 @@ export const useLibraryStore = defineStore('library', () => {
       .filter((t): t is Track => t !== undefined)
   }
 
+  function replaceTrack(updated: Track) {
+    const idx = tracks.value.findIndex(t => t.path === updated.path)
+    if (idx !== -1) {
+      tracks.value[idx] = updated
+    }
+  }
+
+  function addTrack(t: Track) {
+    if (!tracks.value.find(t2 => t2.path === t.path)) {
+      tracks.value.push(t)
+    }
+  }
+
   return {
     tracks, musicFolder, scanning, coverArtCache, albums, artists,
     recentlyPlayed, mostPlayed,
     scanFolder, loadCoverArt, loadCoverArtForAlbum,
     tracksForAlbum, tracksForArtist,
     loadRecentlyPlayed, loadMostPlayed, trackByPath, resolveRecords,
+    replaceTrack, addTrack,
   }
 })

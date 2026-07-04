@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-dialog'
 import { useLibraryStore } from '../stores/library'
 import { usePlayerStore } from '../stores/player'
 import { useFavoritesStore } from '../stores/favorites'
@@ -8,6 +9,7 @@ import { useSpotifyStore, mapSpotifyTrack } from '../stores/spotify'
 import { useUiStore } from '../stores/ui'
 import AlbumCard from '../components/AlbumCard.vue'
 import TrackList from '../components/TrackList.vue'
+import MetadataEditor from '../components/MetadataEditor.vue'
 import type { LibraryFilter, AlbumGroup, Track } from '../types'
 
 const lib = useLibraryStore()
@@ -133,6 +135,39 @@ const filteredTracks = computed(() => {
   )
 })
 
+// Metadata editor
+const editingTrack = ref<Track | null>(null)
+const showEditor = ref(false)
+
+function editTrackMetadata(track: Track) {
+  editingTrack.value = track
+  showEditor.value = true
+}
+
+function onMetadataSaved(updated: Track) {
+  lib.replaceTrack(updated)
+}
+
+async function addMusic() {
+  const files = await open({
+    multiple: true,
+    filters: [{
+      name: 'Audio',
+      extensions: ['flac', 'wav', 'aiff', 'aif', 'aifc', 'alac', 'm4a', 'mp3', 'aac', 'ogg', 'opus', 'wma', 'dsf', 'dff', 'ape', 'wv', 'tak'],
+    }],
+  })
+  if (!files) return
+  const paths = Array.isArray(files) ? files : [files]
+  try {
+    const tracks: Track[] = await invoke('add_music_files', { paths })
+    for (const t of tracks) {
+      lib.addTrack(t)
+    }
+  } catch (e) {
+    console.error('add music error:', e)
+  }
+}
+
 const totalDuration = computed(() => {
   const total = lib.tracks.reduce((s, t) => s + t.duration, 0)
   const h = Math.floor(total / 3600)
@@ -188,7 +223,8 @@ const favoriteAlbums = computed<AlbumGroup[]>(() => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
         </div>
         <h2>Your library is empty</h2>
-        <p>Go to <strong>Settings</strong> in the sidebar to connect your local music folder.</p>
+        <p>Add music files or go to <strong>Settings</strong> to connect a folder.</p>
+        <button class="btn-primary add-btn" @click="addMusic">+ add music</button>
       </div>
     </div>
 
@@ -230,6 +266,12 @@ const favoriteAlbums = computed<AlbumGroup[]>(() => {
             </div>
           </div>
         </div>
+        <div class="detail-toolbar">
+          <button class="btn-edit" @click="albumDetail && editTrackMetadata(albumDetail.tracks[0])">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            edit metadata
+          </button>
+        </div>
         <div class="detail-tracks">
           <TrackList
             :tracks="lib.tracksForAlbum(selectedAlbum.artist, selectedAlbum.album)"
@@ -247,7 +289,9 @@ const favoriteAlbums = computed<AlbumGroup[]>(() => {
               <h1 class="main-title">library</h1>
               <div class="main-stats">{{ lib.tracks.length }} tracks / {{ lib.albums.length }} albums / {{ totalDuration }}</div>
             </div>
-            <div class="head-actions"></div>
+            <div class="head-actions">
+              <button class="btn-add-music" @click="addMusic">+ add music</button>
+            </div>
           </div>
           <div class="filters">
             <button :class="['filter-chip', { on: filter === 'albums' }]" @click="filter = 'albums'; ui.triggerSearch('')">ALBUMS</button>
@@ -332,6 +376,8 @@ const favoriteAlbums = computed<AlbumGroup[]>(() => {
       </div>
     </template>
   </div>
+
+  <MetadataEditor :track="editingTrack" :show="showEditor" @close="showEditor = false" @saved="onMetadataSaved" />
 </template>
 
 <style scoped>
@@ -477,6 +523,39 @@ const favoriteAlbums = computed<AlbumGroup[]>(() => {
 .detail-play { padding: 10px 24px; font-size: 12px; }
 .detail-play svg { width: 14px; height: 14px; }
 .detail-tracks { flex: 1; overflow-y: auto; }
+
+.detail-toolbar {
+  display: flex; gap: 8px;
+  padding: 12px 24px;
+  border-bottom: 2px solid var(--border);
+}
+.btn-edit {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  font-family: var(--font); font-size: 10px; font-weight: 700; text-transform: uppercase;
+  background: var(--secondary-background);
+  color: var(--foreground);
+  border: 2px solid var(--border);
+  border-radius: calc(var(--radius-base) - 2px);
+  cursor: pointer;
+  box-shadow: 2px 2px 0px 0px var(--border);
+  transition: all 0.15s;
+}
+.btn-edit:hover { transform: translate(2px, 2px); box-shadow: none; }
+.btn-edit svg { width: 14px; height: 14px; }
+.btn-add-music {
+  padding: 6px 14px;
+  font-family: var(--font); font-size: 11px; font-weight: 700;
+  background: var(--main);
+  color: var(--main-foreground);
+  border: 2px solid var(--main);
+  border-radius: calc(var(--radius-base) - 2px);
+  cursor: pointer;
+  box-shadow: 2px 2px 0px 0px var(--border);
+  transition: all 0.15s;
+}
+.btn-add-music:hover { transform: translate(2px, 2px); box-shadow: none; }
+.add-btn { margin-top: 8px; }
 
 .v-divider { width: 2px; background: var(--border); margin: 0 4px; }
 .search-header { font-size: 14px; font-weight: 800; color: var(--main); margin-bottom: 12px; }

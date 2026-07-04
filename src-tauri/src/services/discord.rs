@@ -24,12 +24,12 @@ impl Drop for DiscordService {
 }
 
 impl DiscordService {
-    pub fn new(player: Arc<Mutex<Player>>, settings_path: std::path::PathBuf) -> Self {
+    pub fn new(player: Arc<Mutex<Player>>, data_dir: std::path::PathBuf) -> Self {
         let shutdown = Arc::new(AtomicBool::new(false));
         let s = shutdown.clone();
         thread::Builder::new()
             .name("discord-rpc".into())
-            .spawn(move || run_loop(player, settings_path, s))
+            .spawn(move || run_loop(player, data_dir.join("rifly_settings.json"), s))
             .ok();
         Self { shutdown }
     }

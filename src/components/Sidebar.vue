@@ -30,8 +30,10 @@ async function openMiniPlayer() {
       resizable: false,
     })
     mini.once('tauri://created', () => {})
-    mini.once('tauri://error', () => {})
-  } catch {}
+    mini.once('tauri://error', (e) => { console.error('Mini player error:', e) })
+  } catch (err) {
+    console.error('Failed to open mini player:', err)
+  }
 }
 </script>
 

@@ -110,6 +110,7 @@ pub fn run() {
             commands::create_music_entry,
             commands::scan_music_entries,
             commands::edit_track_metadata,
+            commands::create_rifly_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

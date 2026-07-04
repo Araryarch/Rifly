@@ -70,7 +70,6 @@ function playFav(_track: any, idx: number) {
       </div>
 
       <template v-else>
-        <!-- Recently Played -->
         <div v-if="recentTracks.length > 0" class="section animate-fade-in">
           <h2 class="section-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
@@ -79,7 +78,6 @@ function playFav(_track: any, idx: number) {
           <TrackList :tracks="recentTracks" :showArtist="true" :showAlbum="true" compact @play="playRecent" />
         </div>
 
-        <!-- Most Played -->
         <div v-if="topTracks.length > 0" class="section animate-fade-in">
           <h2 class="section-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
@@ -88,7 +86,6 @@ function playFav(_track: any, idx: number) {
           <TrackList :tracks="topTracks" :showArtist="true" :showAlbum="true" compact @play="playTop" />
         </div>
 
-        <!-- Favorites Preview -->
         <div v-if="favoriteTracks.length > 0" class="section animate-fade-in">
           <h2 class="section-title">
             <svg viewBox="0 0 24 24" fill="currentColor" style="color: oklch(65% 0.2 20)"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
@@ -97,7 +94,6 @@ function playFav(_track: any, idx: number) {
           <TrackList :tracks="favoriteTracks" :showArtist="true" :showAlbum="true" compact @play="playFav" />
         </div>
 
-        <!-- Empty state when no history -->
         <div v-if="recentTracks.length === 0 && topTracks.length === 0 && favoriteTracks.length === 0" class="empty-state animate-fade-in-up">
           <div class="empty-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>

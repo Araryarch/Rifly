@@ -431,3 +431,17 @@ pub async fn start_oauth_server() -> Result<String, String> {
     }
     Err("Failed to capture code".into())
 }
+
+#[tauri::command]
+pub fn create_rifly_folder(base: String) -> Result<String, String> {
+    let root = std::path::Path::new(&base).join("Rifly");
+    let dirs = ["Albums", "Playlists", "Imports"];
+    for d in &dirs {
+        std::fs::create_dir_all(root.join(d))
+            .map_err(|e| format!("Failed to create Rifly/{d}: {e}"))?;
+    }
+    // Create a placeholder .gitkeep inside Imports so it's not empty
+    std::fs::write(root.join("Imports/.gitkeep"), "")
+        .map_err(|e| format!("Failed to write .gitkeep: {e}"))?;
+    Ok(root.to_string_lossy().to_string())
+}

@@ -16,6 +16,7 @@ import NowPlayingView from './views/NowPlayingView.vue'
 import QueueView from './views/QueueView.vue'
 import SearchView from './views/SearchView.vue'
 import SettingsView from './views/SettingsView.vue'
+import SetupView from './views/SetupView.vue'
 import { usePlayerStore } from './stores/player'
 import type { ViewName } from './types'
 
@@ -25,6 +26,7 @@ const player = usePlayerStore()
 const favorites = useFavoritesStore()
 const library = useLibraryStore()
 const currentView = ref<ViewName>('library')
+const showSetup = ref(false)
 
 // --- Keyboard Shortcuts ---
 function onKeyDown(e: KeyboardEvent) {
@@ -113,6 +115,13 @@ onMounted(async () => {
   if (isMini.value) return
 
   document.addEventListener('keydown', onKeyDown)
+
+  // Check first-run setup
+  try {
+    const done = await invoke('get_setting', { key: 'setup_done' })
+    if (done !== 'true') showSetup.value = true
+  } catch { showSetup.value = true }
+
   await player.init()
   await favorites.load()
   await setupDragDrop()
@@ -127,6 +136,7 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <SetupView v-if="showSetup" @done="showSetup = false" />
   <div v-if="isMini" class="mini-shell">
     <MiniPlayer />
   </div>

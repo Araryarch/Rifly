@@ -42,7 +42,7 @@ export interface SessionData {
 
 export type PlaybackStatus = 'stopped' | 'playing' | 'paused' | 'loading'
 export type RepeatMode = 'off' | 'one' | 'all'
-export type ViewName = 'library' | 'now-playing' | 'queue' | 'search' | 'settings'
+export type ViewName = 'library' | 'your-library' | 'liked-songs' | 'now-playing' | 'queue' | 'search' | 'settings'
 export type AudioSource = 'local' | 'spotify'
 export type LibraryFilter = 'albums' | 'artists' | 'tracks'
 

@@ -10,6 +10,8 @@ import RightPanel from './components/RightPanel.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import MiniPlayer from './components/MiniPlayer.vue'
 import LibraryView from './views/LibraryView.vue'
+import HomeView from './views/HomeView.vue'
+import LikedSongsView from './views/LikedSongsView.vue'
 import NowPlayingView from './views/NowPlayingView.vue'
 import QueueView from './views/QueueView.vue'
 import SearchView from './views/SearchView.vue'
@@ -146,7 +148,9 @@ onUnmounted(() => {
 
       <main class="shell-main">
         <Transition name="fade" mode="out-in">
-          <LibraryView v-if="currentView === 'library'" key="library" />
+          <HomeView v-if="currentView === 'library'" key="home" />
+          <LibraryView v-else-if="currentView === 'your-library'" key="your-library" />
+          <LikedSongsView v-else-if="currentView === 'liked-songs'" key="liked-songs" />
           <NowPlayingView v-else-if="currentView === 'now-playing'" key="now-playing" />
           <QueueView v-else-if="currentView === 'queue'" key="queue" />
           <SearchView v-else-if="currentView === 'search'" key="search" />

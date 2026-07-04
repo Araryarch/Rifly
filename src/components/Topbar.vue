@@ -19,16 +19,21 @@ function handleHome() {
   query.value = ''
 }
 
-const appWindow = getCurrentWindow()
+let appWindow: any
+try {
+  appWindow = getCurrentWindow()
+} catch (e) {
+  // Not in Tauri
+}
 
 function minimize() {
-  appWindow.minimize()
+  appWindow?.minimize()
 }
 function toggleMaximize() {
-  appWindow.toggleMaximize()
+  appWindow?.toggleMaximize()
 }
 function closeWindow() {
-  appWindow.close()
+  appWindow?.close()
 }
 
 function startDrag(e: MouseEvent) {
@@ -37,7 +42,7 @@ function startDrag(e: MouseEvent) {
   if (target.closest('button') || target.closest('input') || target.closest('.avatar') || target.closest('.search-box')) {
     return
   }
-  appWindow.startDragging()
+  appWindow?.startDragging()
 }
 </script>
 
